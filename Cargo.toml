@@ -2,5 +2,52 @@
 name = "phandas_rs"
 version = "0.1.0"
 edition = "2021"
+# `Option::is_none_or`（src/factor/panel.rs:214）在 1.82 稳定，是当前 MSRV 下限。
+# 注意：本机仅有 stable 1.92，未用 1.82 工具链实际验证过。
+# rust-version = "1.82"
+authors = ["GG-lyf <2083298549@qq.com>"]
+description = "Alpha factor construction on dense panel data with 70+ cross-sectional and time-series operators. Zero dependencies. Rust port of Python phandas."
+readme = "README.md"
+repository = "https://github.com/GG-lyf/phandas_rs"
+documentation = "https://docs.rs/phandas_rs"
+license = "MIT"
+keywords = ["quant", "alpha", "factor", "panel-data", "finance"]
+categories = ["finance", "mathematics", "science"]
 
+# 白名单：只有列出的路径会进入 .crate 包。
+# 用 include 而不是 exclude，是因为 .claude/ 没被 .gitignore 忽略，
+# 用 exclude 容易漏掉这类目录而把本地配置发布上去。
+include = [
+    "/src",
+    "/examples",
+    "/README.md",
+]
+
+[lib]
+name = "phandas_rs"
+path = "src/lib.rs"
+
+# src/main.rs 是演示程序，不是这个包的主要用途。
+# 显式命名以免 `cargo install phandas_rs` 装出一个叫 phandas_rs 的样例二进制。
+[[bin]]
+name = "phandas-demo"
+path = "src/main.rs"
+
+# 刻意保持为空：分位数反函数、最小二乘、条件数估计、CSV 解析都在 src/factor/ 内实现。
+# 日后引入 rayon 之类的并行后端时，请放在可选 feature 后面，别破坏零依赖这个卖点。
 [dependencies]
+
+# 仅在 phandas_rs 作为根 crate 构建时生效（被别人当依赖时会被忽略）。
+# 主要服务 `cargo run --example smoke --release` 里的耗时测量。
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+# [lints.rust]
+# # 全 crate 无 unsafe，用 forbid 把这一点固定下来。
+# unsafe_code = "forbid"
