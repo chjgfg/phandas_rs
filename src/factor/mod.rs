@@ -43,7 +43,7 @@
 //! | 文件 | 内容 |
 //! |---|---|
 //! | `constants.rs` | 数值阈值与内置分组定义 |
-//! | `numeric.rs` | 跳过 NaN 的统计量、名次百分位、分位数反函数、[`Driver`] |
+//! | `numeric.rs` | 跳过 NaN 的统计量、名次百分位、分位数反函数与 CDF、[`Driver`]（公开模块） |
 //! | `linalg.rs` | 特征值、条件数、线性方程求解、求逆、最小二乘 |
 //! | `panel.rs` | [`Panel`] 行情容器与 CSV 解析 |
 //! | `core.rs` | [`Factor`] 矩阵本体、[`Operand`] 与全部运算子共用的内部机制 |
@@ -64,16 +64,16 @@ mod display;
 mod group;
 mod linalg;
 mod neutralize;
-mod numeric;
+pub mod numeric;
 mod ops;
 mod operators;
 mod panel;
 mod ts;
 
-#[cfg(test)]
-mod tests;
-
-pub use self::constants::{group_definitions, EPSILON, MATRIX_COND_THRESHOLD, TOLERANCE_FLOAT};
+pub use self::constants::{
+    group_definitions, EPSILON, MATRIX_COND_THRESHOLD, SIGNAL_LONG_SUM, SIGNAL_SHORT_SUM,
+    SIGNAL_TOLERANCE, TOLERANCE_FLOAT,
+};
 pub use self::core::{Factor, Operand};
 pub use self::numeric::Driver;
 pub use self::operators::*;

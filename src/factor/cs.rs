@@ -1,6 +1,6 @@
 //! 横截面运算子（逐 timestamp），对应 Python 侧 `_apply_cs_operation` 家族。
 
-use super::constants::{EPSILON, TOLERANCE_FLOAT};
+use super::constants::{EPSILON, SIGNAL_LONG_SUM, SIGNAL_SHORT_SUM, SIGNAL_TOLERANCE, TOLERANCE_FLOAT};
 use super::core::Factor;
 use super::numeric::{
     argsort_stable, count_valid, fmt_num, has_nan, nanmean, nanmedian, nanstd, rank_pct, Driver,
@@ -258,5 +258,32 @@ impl Factor {
             }
             demeaned.into_iter().map(|x| x / abs_sum).collect()
         })
+    }
+
+    /// 判断指定期是否已经是美元中性信号，对应 Python 侧 `Factor._is_signal`。
+    ///
+    /// - 入参：`ts` 目标时间戳；传 `None` 表示取最后一期（对应上游的 `timestamp.max()`）。
+    /// - 加工：取该期横截面 → 全为 NaN 或该期不存在时判否 → 分别累加正值与负值
+    ///   （NaN 因比较恒假而被排除）→ 要求多头和 ≈ `0.5`、空头和 ≈ `-0.5`、总和 ≈ `0`。
+    ///   容差沿用 `np.isclose` 的 `atol + rtol × |目标值|`，其中 `atol` 取
+    ///   [`SIGNAL_TOLERANCE`]、`rtol` 取 numpy 默认的 `1e-5`。
+    /// - 出参：满足三个条件返回 `true`。回测据此判断策略因子能否直接当权重用，
+    ///   见 [`crate::backtest::Backtester`]。
+    pub fn is_signal(&self, ts: Option<&str>) -> bool {
+        let ti = match ts {
+            Some(t) => self.timestamps.iter().position(|x| x == t),
+            None => self.timestamps.len().checked_sub(1),
+        };
+        let Some(ti) = ti else { return false };
+        let row = self.row(ti);
+        if count_valid(row) == 0 {
+            return false;
+        }
+        let long_sum: f64 = row.iter().filter(|v| **v > 0.0).sum();
+        let short_sum: f64 = row.iter().filter(|v| **v < 0.0).sum();
+        let isclose = |a: f64, b: f64| (a - b).abs() <= SIGNAL_TOLERANCE + 1e-5 * b.abs();
+        isclose(long_sum, SIGNAL_LONG_SUM)
+            && isclose(short_sum, SIGNAL_SHORT_SUM)
+            && isclose(long_sum + short_sum, 0.0)
     }
 }

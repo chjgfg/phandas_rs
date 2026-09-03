@@ -4,12 +4,21 @@
 [![docs.rs](https://docs.rs/phandas_rs/badge.svg)](https://docs.rs/phandas_rs)
 [![license](https://img.shields.io/crates/l/phandas_rs.svg)](./LICENSE)
 
-Alpha factor construction on dense panel data — 70+ cross-sectional and time-series
-operators, zero dependencies. A Rust port of the Python
-[phandas](https://github.com/quantbai/phandas) factor engine.
+Alpha factor construction and event-driven backtesting on dense panel data — 70+
+cross-sectional and time-series operators, portfolio simulation with transaction costs,
+11 performance metrics, zero dependencies. A Rust port of the Python
+[phandas](https://github.com/quantbai/phandas) engine.
 
-因子构造库：把 Python 版 phandas 的 `Factor` / `Panel` 与全部因子运算子移植到 Rust，
-**零外部依赖**（分位数反函数、最小二乘、条件数估计、CSV 解析全部自带实现）。
+因子构造 + 回测库：把 Python 版 phandas 的 `Factor` / `Panel` 与全部因子运算子、以及
+事件驱动回测引擎移植到 Rust，**零外部依赖**（分位数反函数与 CDF、最小二乘、条件数估计、
+CSV 解析、日期运算全部自带实现）。
+
+- [`factor`](https://docs.rs/phandas_rs/latest/phandas_rs/factor/) —— 因子构造，对应上游
+  `core.py` / `operators.py` / `panel.py` / `constants.py`。
+- [`backtest`](https://docs.rs/phandas_rs/latest/phandas_rs/backtest/) —— 事件驱动回测，
+  对应上游 `backtest.py`（不含绘图）。
+
+上游的行情抓取、绘图与实盘下单未移植，它们各自绑定 ccxt / matplotlib / python-okx。
 
 ## 安装
 
@@ -43,6 +52,29 @@ let alpha = vector_neut(&rank(&momentum), &rank(&volume.reverse()))
 println!("{}", alpha.show(10));
 ```
 
+拿这个 alpha 跑回测，用次日开盘价成交：
+
+```rust
+use phandas_rs::backtest::Backtester;
+
+let open = panel.factor("open").unwrap();
+let signal = alpha.signal();                 // 归一成多空各 0.5 的美元中性权重
+let bt = Backtester::new(&open, &signal)
+    .transaction_cost(0.0003, 0.0003)
+    .initial_capital(1000.0)
+    .run()
+    .unwrap()
+    .calculate_metrics(0.03);
+
+println!("{}", bt.summary());
+println!("{}", bt.drawdown_report(5));
+```
+
+调仓是 T+1：第 `i` 期用第 `i-1` 期的因子值算目标市值，按第 `i` 期的成交价因子成交。
+净值、收益率、回撤、换手率、等权基准都能单独取出（`bt.equity()` / `bt.returns()` /
+`bt.drawdown()` / `bt.turnover()` / `bt.benchmark_equity()`），绘图交给调用方。
+绩效指标需要至少两期收益率才算得出，上面那份 2 期的示例面板只够跑通流程。
+
 跑内置演示与性能冒烟测试：
 
 ```bash
@@ -69,13 +101,31 @@ cargo run --release --example smoke -- path/to/crypto_1d.csv
 
 完整清单见 [docs.rs](https://docs.rs/phandas_rs)。
 
+## 回测
+
+| 产出 | 方法 |
+| --- | --- |
+| 净值 / 收益率 / 回撤 | `equity()` `returns()` `drawdown()` |
+| 换手率 / 成交流水 | `turnover()` `trades()` |
+| 等权买入持有基准 | `benchmark_equity()` |
+| 绩效指标（11 项） | `metrics()` —— 累计与年化收益、年化波动、夏普、索提诺、卡玛、最大回撤、净值线性度、VaR 95%、CVaR、PSR |
+| 回撤区间明细 | `drawdown_periods()` |
+| 文本报告 | `summary()` `drawdown_report(top_n)` |
+
+口径与上游一致：年化按**日历天数** 365 折算（不是交易日），无风险利率默认 `0.03`，
+双边手续费默认 `0.0003`。目标市值有三条路径——`Neutralization::None` 直接用因子值、
+因子本身已是美元中性信号时直接用、否则去均值后按绝对值和归一。
+
 ## 与 Python 版的偏差
 
 移植刻意保留了 Python 侧的若干反直觉行为（例如 `ts_decay_linear` 的权重方向、
 `ts_skewness` 的复合定义、`spread` 中 NaN 占用多头名额），以保证因子值可比对。
-另有少量已知偏差（`norm.ppf` 用 Acklam 有理逼近，相对误差约 `1e-9`；
-时间戳按字符串字典序排序，要求 ISO-8601 输入）。逐条说明见
-[`factor` 模块文档](https://docs.rs/phandas_rs/latest/phandas_rs/factor/)。
+另有少量已知偏差：`norm.ppf` 用 Acklam 有理逼近（相对误差约 `1e-9`）；时间戳按字符串
+字典序排序，要求 ISO-8601 输入；`ts_corr` / `ts_covariance` / `ts_autocorr` 按定义正确
+计算，未复刻上游的 groupby 错位；回测在 `full_rebalance` 模式下一天只记一条净值，
+上游会记两条。逐条说明见
+[`factor`](https://docs.rs/phandas_rs/latest/phandas_rs/factor/) 与
+[`backtest`](https://docs.rs/phandas_rs/latest/phandas_rs/backtest/) 的模块文档。
 
 ## MSRV
 

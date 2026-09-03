@@ -1,9 +1,9 @@
-//! `factor` 模块的单元测试。
+//! `factor` 模块的集成测试，覆盖 `Panel`、`Factor` 与全部因子算子。
 
 use std::collections::BTreeMap;
 
-use super::numeric::{nanstd, norm_ppf};
-use super::*;
+use phandas_rs::factor::numeric::{nanstd, norm_ppf};
+use phandas_rs::factor::*;
 
 /// 4 期 × 3 标的的小面板，覆盖含 NaN 的场景。
 fn sample_panel() -> Panel {

@@ -2,23 +2,26 @@
 name = "phandas_rs"
 version = "0.1.0"
 edition = "2021"
-# `Option::is_none_or`（src/factor/panel.rs:214）在 1.82 稳定，是当前 MSRV 下限。
+# `Option::is_none_or`（src/factor/panel.rs:214）在 1.82 稳定；`std::iter::repeat_n`
+# （src/factor/ts.rs）同样是 1.82 稳定，两者共同决定当前 MSRV 下限。
 # 注意：本机仅有 stable 1.92，未用 1.82 工具链实际验证过。
 # rust-version = "1.82"
 authors = ["GG-lyf <2083298549@qq.com>"]
-description = "Alpha factor construction on dense panel data with 70+ cross-sectional and time-series operators. Zero dependencies. Rust port of Python phandas."
+description = "Alpha factor construction and event-driven backtesting on dense panel data: 70+ cross-sectional and time-series operators, portfolio simulation with transaction costs, 11 performance metrics. Zero dependencies. Rust port of Python phandas."
 readme = "README.md"
 repository = "https://github.com/GG-lyf/phandas_rs"
 documentation = "https://docs.rs/phandas_rs"
 license = "MIT"
-keywords = ["quant", "alpha", "factor", "panel-data", "finance"]
+keywords = ["quant", "alpha", "factor", "panel-data", "backtesting"]
 categories = ["finance", "mathematics", "science"]
 
 # 白名单：只有列出的路径会进入 .crate 包。
-# 用 include 而不是 exclude，是因为 .claude/ 没被 .gitignore 忽略，
-# 用 exclude 容易漏掉这类目录而把本地配置发布上去。
+# 用 include 而不是 exclude，是因为仓库里有 .omc/ 这类本地脚本目录，
+# 用 exclude 容易漏掉而把本地文件发布上去。
+# /tests 一并收录：测试已全部搬到那里，不带上发布包就无法自验。
 include = [
     "/src",
+    "/tests",
     "/examples",
     "/README.md",
 ]

@@ -8,7 +8,7 @@
 /// - 入参：`v` 待检查的数值切片。
 /// - 加工：顺序扫描，遇到首个 NaN 即短路返回。
 /// - 出参：存在 NaN 返回 `true`，否则 `false`（空切片返回 `false`）。
-pub(crate) fn has_nan(v: &[f64]) -> bool {
+pub fn has_nan(v: &[f64]) -> bool {
     v.iter().any(|x| x.is_nan())
 }
 
@@ -17,7 +17,7 @@ pub(crate) fn has_nan(v: &[f64]) -> bool {
 /// - 入参：`v` 待统计的数值切片。
 /// - 加工：过滤掉 NaN 后计数。
 /// - 出参：非 NaN 元素个数，用于判定 pandas `min_periods` 是否满足。
-pub(crate) fn count_valid(v: &[f64]) -> usize {
+pub fn count_valid(v: &[f64]) -> usize {
     v.iter().filter(|x| !x.is_nan()).count()
 }
 
@@ -35,7 +35,7 @@ fn nansum(v: &[f64]) -> f64 {
 /// - 入参：`v` 待求均值的数值切片。
 /// - 加工：先数有效值个数，再用有效值之和除以该个数。
 /// - 出参：有效值的算术平均；无有效值时返回 NaN。
-pub(crate) fn nanmean(v: &[f64]) -> f64 {
+pub fn nanmean(v: &[f64]) -> f64 {
     let n = count_valid(v);
     if n == 0 {
         return f64::NAN;
@@ -48,7 +48,7 @@ pub(crate) fn nanmean(v: &[f64]) -> f64 {
 /// - 入参：`v` 数值切片；`ddof` 自由度修正量（分母为 `有效个数 - ddof`）。
 /// - 加工：求有效值均值 → 累加平方偏差 → 除以 `n - ddof` → 开平方。
 /// - 出参：标准差；有效个数不足 `ddof + 1` 时返回 NaN。
-pub(crate) fn nanstd(v: &[f64], ddof: usize) -> f64 {
+pub fn nanstd(v: &[f64], ddof: usize) -> f64 {
     let n = count_valid(v);
     if n <= ddof {
         return f64::NAN;
@@ -67,7 +67,7 @@ pub(crate) fn nanstd(v: &[f64], ddof: usize) -> f64 {
 /// - 入参：`v` 数值切片。
 /// - 加工：滤掉 NaN → 升序排序 → 奇数个取正中、偶数个取中间两数均值。
 /// - 出参：中位数；无有效值时返回 NaN。
-pub(crate) fn nanmedian(v: &[f64]) -> f64 {
+pub fn nanmedian(v: &[f64]) -> f64 {
     let mut xs: Vec<f64> = v.iter().copied().filter(|x| !x.is_nan()).collect();
     if xs.is_empty() {
         return f64::NAN;
@@ -86,7 +86,7 @@ pub(crate) fn nanmedian(v: &[f64]) -> f64 {
 /// - 入参：`v` 数值切片。
 /// - 加工：以 NaN 为初值折叠，遇到更小的有效值就替换。
 /// - 出参：有效值中的最小者；无有效值时返回 NaN。
-pub(crate) fn nanmin(v: &[f64]) -> f64 {
+pub fn nanmin(v: &[f64]) -> f64 {
     v.iter()
         .copied()
         .filter(|x| !x.is_nan())
@@ -98,7 +98,7 @@ pub(crate) fn nanmin(v: &[f64]) -> f64 {
 /// - 入参：`v` 数值切片。
 /// - 加工：以 NaN 为初值折叠，遇到更大的有效值就替换。
 /// - 出参：有效值中的最大者；无有效值时返回 NaN。
-pub(crate) fn nanmax(v: &[f64]) -> f64 {
+pub fn nanmax(v: &[f64]) -> f64 {
     v.iter()
         .copied()
         .filter(|x| !x.is_nan())
@@ -189,7 +189,7 @@ pub(crate) fn rank_pct(v: &[f64], method: RankMethod) -> Vec<f64> {
 ///   越界或 NaN 返回 NaN。相对误差约 `1e-9`。
 // 系数照抄 Acklam 原文，保留其位数以便与参考实现逐位比对
 #[allow(clippy::excessive_precision)]
-pub(crate) fn norm_ppf(p: f64) -> f64 {
+pub fn norm_ppf(p: f64) -> f64 {
     const A: [f64; 6] = [
         -3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
         1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00,
@@ -233,6 +233,51 @@ pub(crate) fn norm_ppf(p: f64) -> f64 {
         -(((((C[0] * q + C[1]) * q + C[2]) * q + C[3]) * q + C[4]) * q + C[5])
             / ((((D[0] * q + D[1]) * q + D[2]) * q + D[3]) * q + 1.0)
     }
+}
+
+/// 标准正态分布累积分布函数（Hart 1968 有理逼近，West 的双精度实现），
+/// 对应 `scipy.stats.norm.cdf`。回测的 PSR 需要它。
+///
+/// - 入参：`x` 分位点。
+/// - 加工：先算 `|x|` 的上尾概率——`|x| < 7.07` 走两组 7 阶有理多项式之比，
+///   更远的尾部走连分式；`|x| > 37` 时上尾在双精度下已是 0。最后按 `x` 的符号翻转。
+/// - 出参：`Φ(x)`，取值落在 `[0, 1]`；绝对误差约 `1e-15`。`x` 为 NaN 时返回 NaN。
+// 系数照抄 Hart / West 原文，保留其位数以便与参考实现逐位比对
+#[allow(clippy::excessive_precision)]
+pub fn norm_cdf(x: f64) -> f64 {
+    if x.is_nan() {
+        return f64::NAN;
+    }
+    let xabs = x.abs();
+    let upper = if xabs > 37.0 {
+        0.0
+    } else {
+        let e = (-xabs * xabs / 2.0).exp();
+        if xabs < 7.071_067_811_865_47 {
+            let mut num = 3.526_249_659_989_11e-02 * xabs + 0.700_383_064_443_688;
+            num = num * xabs + 6.373_962_203_531_65;
+            num = num * xabs + 33.912_866_078_383;
+            num = num * xabs + 112.079_291_497_871;
+            num = num * xabs + 221.213_596_169_931;
+            num = num * xabs + 220.206_867_912_376;
+            let mut den = 8.838_834_764_831_84e-02 * xabs + 1.755_667_163_182_64;
+            den = den * xabs + 16.064_177_579_207;
+            den = den * xabs + 86.780_732_202_946_1;
+            den = den * xabs + 296.564_248_779_674;
+            den = den * xabs + 637.333_633_378_831;
+            den = den * xabs + 793.826_512_519_948;
+            den = den * xabs + 440.413_735_824_752;
+            e * num / den
+        } else {
+            // 远尾用连分式：xabs + 1/(xabs + 2/(xabs + 3/(xabs + 4/(xabs + 0.65))))
+            let mut cf = xabs + 0.65;
+            for k in (1..=4).rev() {
+                cf = xabs + k as f64 / cf;
+            }
+            e / cf / 2.506_628_274_631
+        }
+    };
+    if x > 0.0 { 1.0 - upper } else { upper }
 }
 
 /// 分位数映射驱动，对应 Python 侧 `quantile(driver=...)` 参数。
