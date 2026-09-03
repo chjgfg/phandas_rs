@@ -1,6 +1,25 @@
-//! 临时差分测试：跑一遍全部因子算子并落盘，供与 Python phandas 逐格对比（跑完即删）。
+//! 与上游 Python phandas 逐格对照的差分测试。
+//!
+//! 本测试本身不做断言，只是把全部因子算子在同一份面板上跑一遍、按
+//! `算子,timestamp,symbol,值` 落盘，交给 Python 侧的同名脚本产出对照文件后逐格比较。
+//! 上游实现依赖 pandas / numpy / scipy，无法在 Rust 侧复现，因此标了 `#[ignore]`，
+//! 默认不参与 `cargo test`，需要时显式跑：
+//!
+//! ```text
+//! cargo test --test test_upstream_diff -- --ignored --nocapture
+//! ```
+//!
+//! 输出落在 `target/upstream_diff_rs.csv`。Python 侧脚本与比对工具见
+//! `docs/上游能力清单与移植对照.md` 第 6 节。两侧必须读同一份
+//! `tests/data/panel.csv`，改动那份数据时记得两边一起重跑。
+
 use phandas_rs::factor::{Driver, Factor, Panel};
 use std::collections::BTreeMap;
+
+/// 两侧共用的输入面板：12 期 × 4 标的，含 NaN 洞、横截面并列、零、负数、整期全平。
+const PANEL: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/panel.csv");
+/// 落盘位置放在 target 下，避免污染工作区。
+const OUT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/target/upstream_diff_rs.csv");
 
 fn emit(out: &mut String, key: &str, f: &Factor) {
     for (ts, sym, v) in f.to_records() {
@@ -12,12 +31,10 @@ fn emit(out: &mut String, key: &str, f: &Factor) {
     }
 }
 
-fn missing(out: &mut String, key: &str) {
-    out.push_str(&format!("{key},__MISSING__,-,nan\n"));
-}
-
-fn main() {
-    let panel = Panel::from_csv(".omc/difftest/panel.csv").expect("panel.csv 可解析");
+#[test]
+#[ignore = "需要配合 Python 侧脚本比对，默认不跑"]
+fn dump_all_operator_values() {
+    let panel = Panel::from_csv(PANEL).expect("panel.csv 可解析");
     let close = panel.factor("close").expect("close");
     let volume = panel.factor("volume").expect("volume");
     let extra = panel.factor("extra").expect("extra");
@@ -153,17 +170,16 @@ fn main() {
     emit(o, "op_mul_fs", &(&close * 2.0));
     emit(o, "op_div_fs", &(&close / 2.0));
     emit(o, "op_neg", &(-&close));
-    // Rust 侧没有反射运算符：f64 在左侧时无 impl
-    missing(o, "op_radd");
-    missing(o, "op_rsub");
-    missing(o, "op_rmul");
-    missing(o, "op_rtruediv");
-    missing(o, "op_rpow");
+    emit(o, "op_radd", &(2.0 + &close));
+    emit(o, "op_rsub", &(2.0 - &close));
+    emit(o, "op_rmul", &(2.0 * &close));
+    emit(o, "op_rtruediv", &(2.0 / &close));
+    emit(o, "op_rpow", &close.scalar_power(2.0));
     emit(o, "op_pow", &close.power(2.0));
     emit(o, "op_abs", &close.abs());
 
-    std::fs::write(".omc/difftest/out_rs.csv", &*o).expect("落盘");
-    println!("落盘 {} 字节", o.len());
+    std::fs::write(OUT, &*o).expect("落盘");
+    println!("落盘 {} 字节 -> {OUT}", o.len());
     println!("名字派生示例：{} | {}", close.rank().name,
              close.ts_regression(&[&extra], 4, 0, 6).name);
 }

@@ -831,3 +831,46 @@ fn empty_intersection_yields_empty_factor() {
     assert_eq!(sum.n_periods(), 0);
     assert_eq!(sum.values().len(), 0);
 }
+
+#[test]
+fn scalar_on_the_left_mirrors_python_reflected_ops() {
+    let f = Factor::from_records(
+        vec![
+            ("2024-01-01".into(), "AAA".into(), 2.0),
+            ("2024-01-01".into(), "BBB".into(), 0.0),
+            ("2024-01-01".into(), "CCC".into(), f64::NAN),
+        ],
+        "x",
+    );
+    // 可交换的两个直接转发到正向方法，因子名与 Python 的 __radd__ / __rmul__ 一致
+    assert_close((2.0 + &f).at(0, 0), 4.0);
+    assert_eq!((2.0 + &f).name, "(x+2)");
+    assert_close((3.0 * &f).at(0, 0), 6.0);
+    assert_eq!((3.0 * &f).name, "(x*3)");
+    // 不可交换的两个必须调换操作数，且因子名把标量写在左边
+    assert_close((10.0 - &f).at(0, 0), 8.0);
+    assert_close((&f - 10.0).at(0, 0), -8.0);
+    assert_eq!((10.0 - &f).name, "(10-x)");
+    assert_close((10.0 / &f).at(0, 0), 5.0);
+    assert_eq!((10.0 / &f).name, "(10/x)");
+    // 除数恰为 0 → NaN；NaN 位置照常传播
+    assert!((10.0 / &f).at(0, 1).is_nan());
+    assert!((10.0 - &f).at(0, 2).is_nan());
+    // 右值也可以是拥有所有权的因子
+    assert_close((10.0 - f.clone()).at(0, 0), 8.0);
+    assert_close((10.0 / f.clone()).at(0, 0), 5.0);
+    // Rust 没有 `**` 运算符，标量为底的幂只有方法形式
+    assert_close(f.scalar_power(3.0).at(0, 0), 9.0);
+    assert_close(f.scalar_power(3.0).at(0, 1), 1.0);
+    assert_eq!(f.scalar_power(3.0).name, "(3**x)");
+}
+
+#[test]
+fn scalar_div_guards_on_exact_zero_only() {
+    let tiny = Factor::from_records(vec![("2024-01-01".into(), "AAA".into(), 1e-12)], "tiny");
+    let one = Factor::from_records(vec![("2024-01-01".into(), "AAA".into(), 1.0)], "one");
+    // 复刻 Python __rtruediv__：判据是精确等零，1e-12 会照除出一个极大值
+    assert!((1.0 / &tiny).at(0, 0) > 1e11);
+    // 而因子除因子走 |y| > 1e-10 判据，同一位置得 NaN
+    assert!(one.divide(&tiny).at(0, 0).is_nan());
+}

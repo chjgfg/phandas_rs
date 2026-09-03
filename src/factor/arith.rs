@@ -363,4 +363,57 @@ impl Factor {
     pub fn ne_val<'a>(&self, other: impl Into<Operand<'a>>) -> Factor {
         self.compare(other, "!=", |x, y| x != y)
     }
+
+    // ========================================================================
+    // 标量在左的二元运算，对应 Python 侧 `__rsub__` / `__rtruediv__` / `__rpow__`
+    //
+    // Python 只要在类上定义反射运算符，`2 - close` 就成立：`int.__sub__` 返回
+    // NotImplemented 后，解释器会回头调用 `Factor.__rsub__`。Rust 没有这套自动分派，
+    // 需要在 ops.rs 里为 `f64` 显式实现 Sub / Div。
+    // 加法与乘法可交换，直接转发到 add / multiply，因子名也随之写成 `(close+2)`——
+    // 与 Python 的 `__radd__` / `__rmul__` 转发给正向方法后的命名一致。
+    // ========================================================================
+
+    /// 标量在左的逐元素运算通用实现。
+    ///
+    /// - 入参：`lhs` 位于左侧的标量；`op` 中缀符号文本；`f` 二元运算闭包（第一个参数收 `lhs`）。
+    /// - 加工：逐格调用 `f(lhs, x)`；右侧只有自身一个因子，无需对齐。
+    /// - 出参：形状与索引不变的新因子，名形如 `(2-close)`。
+    pub(crate) fn scalar_infix(&self, lhs: f64, op: &str, f: impl Fn(f64, f64) -> f64) -> Factor {
+        let name = format!("({}{}{})", fmt_num(lhs), op, self.name);
+        self.map_values(name, move |x| f(lhs, x))
+    }
+
+    /// 标量减因子：`lhs - self`，对应 Python 侧 `__rsub__`。
+    ///
+    /// - 入参：`lhs` 被减数标量。
+    /// - 加工：逐格算 `lhs - x`，NaN 照常传播。
+    /// - 出参：新因子，名形如 `(1-rank(close))`。等价于运算符 `1.0 - &f`，
+    ///   常用于翻转已归一到 `(0, 1]` 的因子方向。
+    pub fn scalar_sub(&self, lhs: f64) -> Factor {
+        self.scalar_infix(lhs, "-", |a, b| a - b)
+    }
+
+    /// 标量为底的幂：`base ^ self`，`±inf` 结果归一为 NaN。对应 Python 侧 `__rpow__`。
+    ///
+    /// - 入参：`base` 位于底数位置的标量。
+    /// - 加工：逐格算 `base^x`，溢出成 `±inf` 的结果归一为 NaN（与 [`Factor::power`] 一致）。
+    /// - 出参：新因子，名形如 `(2**ts_zscore(close,30))`。
+    ///   Rust 没有 `**` 运算符，故这一个只提供方法形式。
+    pub fn scalar_power(&self, base: f64) -> Factor {
+        self.scalar_infix(base, "**", |b, e| clean_inf(b.powf(e)))
+    }
+    /// 标量除因子：`lhs / self`，自身**恰为** 0 处输出 NaN。对应 Python 侧 `__rtruediv__`。
+    ///
+    /// - 入参：`lhs` 被除数标量。
+    /// - 加工：逐格检查 `x != 0` 才相除，否则该格 NaN。
+    /// - 出参：新因子，名形如 `(2/close)`。等价于运算符 `2.0 / &f`。
+    ///
+    /// 除零判据与 [`Factor::divide`] 不同：那里因子作除数时用 `|y| > 1e-10`，这里是精确等零。
+    /// 这是如实复刻 Python 侧 `__rtruediv__` 与 `__truediv__` 的不一致，
+    /// 后果是 `2.0 / &f` 在 `f` 极小但非零处会得到极大值（极端情况下 `±inf`，
+    /// 上游此处也未做 inf 清理），而 `&g / &f` 在同一位置会得 NaN。
+    pub fn scalar_div(&self, lhs: f64) -> Factor {
+        self.scalar_infix(lhs, "/", |a, b| if b != 0.0 { a / b } else { f64::NAN })
+    }
 }

@@ -19,6 +19,11 @@
 //! - Python 侧在"全为 NaN"或"合并结果为空"时抛异常，此处一律返回全 NaN / 空因子。
 //! - `ts_step` 沿完整时间轴计数；Python 侧 `cumcount` 按各 symbol 自身首行起算，
 //!   面板不规整（各 symbol 起始期不同）时两者会有偏差。
+//! - `ts_corr` / `ts_covariance` / `ts_autocorr` 的取值与 Python 侧不同：上游用
+//!   `merged.groupby('symbol').apply(...).values` 做位置赋值，而闭包返回的是
+//!   MultiIndex 的 `Series`，走不到 pandas 的 transform 对齐路径，于是各组结果按分组
+//!   顺序拼接后被塞回按 (timestamp, symbol) 排序的行上——标的数大于 1 时结果会串格。
+//!   此处按定义正确计算，未复刻该错位。
 //!
 //! # 如实保留的 Python 侧异常行为
 //!
@@ -28,6 +33,8 @@
 //! - `spread` 用 `np.argsort` 的"NaN 排在末尾"语义挑多头，当期存在 NaN 时多头名额会被 NaN 占用。
 //! - `ts_regression` 的 `rettype = 8` 在单自变量下会索引越界；Python 侧抛 `IndexError`，
 //!   此处返回 NaN。
+//! - [`Factor::scalar_div`]（即 `2.0 / &f`）的除零判据是精确等零，与 [`Factor::divide`]
+//!   的 `|y| > 1e-10` 不一致——这是 Python 侧 `__rtruediv__` 与 `__truediv__` 本身的不一致。
 //!
 //! # 文件划分
 //!
@@ -44,8 +51,8 @@
 //! | `neutralize.rs` | 向量投影 / 回归中性化 |
 //! | `group.rs` | 分组运算子 |
 //! | `ts.rs` | 时序运算子 |
-//! | `arith.rs` | 一元数学变换、二元运算与比较 |
-//! | `ops.rs` | `+ - * /` 与取负的运算符重载 |
+//! | `arith.rs` | 一元数学变换、二元运算与比较，含标量在左的 `scalar_*` |
+//! | `ops.rs` | `+ - * /` 与取负的运算符重载，含 `2.0 - &f` 这类标量在左的写法 |
 //! | `display.rs` | 单行摘要与矩阵表格渲染 |
 //! | `operators.rs` | 自由函数外壳 |
 
