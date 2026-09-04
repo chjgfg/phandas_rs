@@ -4,19 +4,22 @@
 [![docs.rs](https://docs.rs/phandas_rs/badge.svg)](https://docs.rs/phandas_rs)
 [![license](https://img.shields.io/crates/l/phandas_rs.svg)](./LICENSE)
 
-Alpha factor construction and event-driven backtesting on dense panel data — 70+
-cross-sectional and time-series operators, portfolio simulation with transaction costs,
-11 performance metrics, zero dependencies. A Rust port of the Python
-[phandas](https://github.com/quantbai/phandas) engine.
+Alpha factor construction, factor evaluation and event-driven backtesting on dense
+panel data — 70+ cross-sectional and time-series operators, cross-sectional IC with
+IR / t-stat, factor correlation and coverage / turnover / autocorr stats, portfolio
+simulation with transaction costs, 11 performance metrics, zero dependencies. A Rust
+port of the Python [phandas](https://github.com/quantbai/phandas) engine.
 
-因子构造 + 回测库：把 Python 版 phandas 的 `Factor` / `Panel` 与全部因子运算子、以及
-事件驱动回测引擎移植到 Rust，**零外部依赖**（分位数反函数与 CDF、最小二乘、条件数估计、
-CSV 解析、日期运算全部自带实现）。
+因子构造 + 因子评价 + 回测库：把 Python 版 phandas 的 `Factor` / `Panel` 与全部因子运算子、
+因子评价器 `FactorAnalyzer`、以及事件驱动回测引擎移植到 Rust，**零外部依赖**（分位数反函数
+与 CDF、最小二乘、条件数估计、CSV 解析、日期运算、相关系数全部自带实现）。
 
 - [`factor`](https://docs.rs/phandas_rs/latest/phandas_rs/factor/) —— 因子构造，对应上游
   `core.py` / `operators.py` / `panel.py` / `constants.py`。
 - [`backtest`](https://docs.rs/phandas_rs/latest/phandas_rs/backtest/) —— 事件驱动回测，
   对应上游 `backtest.py`（不含绘图）。
+- [`analysis`](https://docs.rs/phandas_rs/latest/phandas_rs/analysis/) —— 因子评价，对应上游
+  `analysis.py`（横截面 IC / IR / t 值、因子相关矩阵、覆盖率 / 换手率 / 自相关）。
 
 上游的行情抓取、绘图与实盘下单未移植，它们各自绑定 ccxt / matplotlib / python-okx。
 
@@ -74,6 +77,32 @@ println!("{}", bt.drawdown_report(5));
 净值、收益率、回撤、换手率、等权基准都能单独取出（`bt.equity()` / `bt.returns()` /
 `bt.drawdown()` / `bt.turnover()` / `bt.benchmark_equity()`），绘图交给调用方。
 绩效指标需要至少两期收益率才算得出，上面那份 2 期的示例面板只够跑通流程。
+
+拿候选因子与价格因子做因子评价——逐期横截面 IC、多持有期的 IR / t 值，因子相关矩阵
+与覆盖率 / 换手率 / 自相关描述统计：
+
+```rust
+use phandas_rs::analysis::{analyze, CorrMethod, IcMethod};
+use phandas_rs::factor::rank;
+
+let factor_a = rank(&alpha); // alpha / close / volume 沿用上面的示例变量
+let factor_b = rank(&volume);
+let report = analyze(&[&factor_a, &factor_b], &close, None).unwrap(); // 默认持有期 [1, 7, 30]
+
+println!("{}", report.summary());          // 与上游 summary() 逐字符对齐的排版
+let ics = report.ic(IcMethod::Spearman);   // 每因子 × 每持有期：ic_mean / ic_std / ir / t_stat / 逐期序列
+let cm = report.correlation(CorrMethod::Pearson);
+println!(
+    "alpha×volume 相关：{:.4}，共同样本 {} 格",
+    cm.get("rank(momentum_1_neut)", "rank(volume)").unwrap(),
+    cm.n_obs()
+);
+```
+
+`ic_series` / `ic_stats`、相关系数 `corr` 与 `CorrMatrix` 都能脱离 `FactorAnalyzer` 单独使用，
+数字口径逐格对齐上游 `analysis.py`（含 `ic_std` 用 numpy 的 `ddof = 0`、`turnover` 是
+"先按标的取均值、再对标的取均值"的两级平均而非池化平均等细节）。Kendall 相关照 scipy 用
+树状数组数反序对，`O(n log n)`——相关矩阵的样本是整块堆叠面板，朴素的逐对枚举撑不住。
 
 跑内置演示与性能冒烟测试：
 

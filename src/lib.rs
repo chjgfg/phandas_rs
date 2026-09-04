@@ -4,10 +4,13 @@
 //!   对应上游 `core.py` / `operators.py` / `panel.py` / `constants.py`。
 //! - [`backtest`]：事件驱动回测。目标市值、手续费、净值与 11 项绩效指标，
 //!   对应上游 `backtest.py`。
+//! - [`analysis`]：因子评价。横截面 IC、相关矩阵与覆盖率 / 换手率 / 自相关等描述统计，
+//!   对应上游 `analysis.py`。
 //!
-//! 全程零外部依赖：分位数反函数与 CDF、最小二乘、条件数估计、CSV 解析、日期运算
-//! 都在仓库内实现。上游的行情抓取、绘图与实盘下单未移植，它们各自绑定
+//! 全程零外部依赖：分位数反函数与 CDF、最小二乘、条件数估计、CSV 解析、日期运算、
+//! 相关系数都在仓库内实现。上游的行情抓取、绘图与实盘下单未移植，它们各自绑定
 //! ccxt / matplotlib / python-okx。
 
+pub mod analysis;
 pub mod backtest;
 pub mod factor;

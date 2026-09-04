@@ -90,7 +90,10 @@ pub fn nanmin(v: &[f64]) -> f64 {
     v.iter()
         .copied()
         .filter(|x| !x.is_nan())
-        .fold(f64::NAN, |acc, x| if acc.is_nan() || x < acc { x } else { acc })
+        .fold(
+            f64::NAN,
+            |acc, x| if acc.is_nan() || x < acc { x } else { acc },
+        )
 }
 
 /// 最大值并跳过 NaN，对应 `Series.max(skipna=True)`。
@@ -102,7 +105,10 @@ pub fn nanmax(v: &[f64]) -> f64 {
     v.iter()
         .copied()
         .filter(|x| !x.is_nan())
-        .fold(f64::NAN, |acc, x| if acc.is_nan() || x > acc { x } else { acc })
+        .fold(
+            f64::NAN,
+            |acc, x| if acc.is_nan() || x > acc { x } else { acc },
+        )
 }
 
 /// `±inf` 归一为 NaN，对应 Python 侧 `Factor._replace_inf`。
@@ -129,10 +135,7 @@ pub(crate) fn argsort_stable(v: &[f64]) -> Vec<usize> {
         (true, true) => a.cmp(&b),
         (true, false) => std::cmp::Ordering::Greater,
         (false, true) => std::cmp::Ordering::Less,
-        (false, false) => v[a]
-            .partial_cmp(&v[b])
-            .expect("已排除 NaN")
-            .then(a.cmp(&b)),
+        (false, false) => v[a].partial_cmp(&v[b]).expect("已排除 NaN").then(a.cmp(&b)),
     });
     idx
 }
@@ -146,18 +149,13 @@ pub(crate) enum RankMethod {
     Average,
 }
 
-/// pandas `Series.rank(method, pct=True)`：NaN 保持 NaN，分母为非 NaN 元素个数。
+/// pandas `Series.rank(method)`：1 起算的名次，NaN 保持 NaN。
 ///
 /// - 入参：`v` 数值切片；`method` 并列名次的处理方式。
-/// - 加工：稳定排序取出有效值顺序 → 扫描相等区间 → 按 `method` 取该区间的最小或平均名次
-///   → 名次除以有效个数得到百分位。
-/// - 出参：长度与 `v` 相同的百分位向量，取值落在 `(0, 1]`；原 NaN 位置仍为 NaN。
-pub(crate) fn rank_pct(v: &[f64], method: RankMethod) -> Vec<f64> {
-    let n_valid = count_valid(v);
+/// - 加工：稳定排序取出有效值顺序 → 扫描相等区间 → 按 `method` 取该区间的最小或平均名次。
+/// - 出参：长度与 `v` 相同的名次向量，取值落在 `[1, 有效个数]`；原 NaN 位置仍为 NaN。
+pub(crate) fn ranks(v: &[f64], method: RankMethod) -> Vec<f64> {
     let mut out = vec![f64::NAN; v.len()];
-    if n_valid == 0 {
-        return out;
-    }
     let valid: Vec<usize> = argsort_stable(v)
         .into_iter()
         .filter(|&i| !v[i].is_nan())
@@ -174,11 +172,27 @@ pub(crate) fn rank_pct(v: &[f64], method: RankMethod) -> Vec<f64> {
             RankMethod::Average => ((k + 1 + j) as f64) / 2.0,
         };
         for &i in &valid[k..j] {
-            out[i] = r / n_valid as f64;
+            out[i] = r;
         }
         k = j;
     }
     out
+}
+
+/// pandas `Series.rank(method, pct=True)`：NaN 保持 NaN，分母为非 NaN 元素个数。
+///
+/// - 入参：`v` 数值切片；`method` 并列名次的处理方式。
+/// - 加工：先取 [`ranks`] 的名次，再逐个除以有效个数得到百分位。
+/// - 出参：长度与 `v` 相同的百分位向量，取值落在 `(0, 1]`；原 NaN 位置仍为 NaN。
+pub(crate) fn rank_pct(v: &[f64], method: RankMethod) -> Vec<f64> {
+    let n_valid = count_valid(v);
+    if n_valid == 0 {
+        return vec![f64::NAN; v.len()];
+    }
+    ranks(v, method)
+        .into_iter()
+        .map(|r| r / n_valid as f64)
+        .collect()
 }
 
 /// 标准正态分布分位数反函数（Acklam 有理逼近），对应 `scipy.stats.norm.ppf`。
@@ -191,20 +205,33 @@ pub(crate) fn rank_pct(v: &[f64], method: RankMethod) -> Vec<f64> {
 #[allow(clippy::excessive_precision)]
 pub fn norm_ppf(p: f64) -> f64 {
     const A: [f64; 6] = [
-        -3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
-        1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00,
+        -3.969683028665376e+01,
+        2.209460984245205e+02,
+        -2.759285104469687e+02,
+        1.383577518672690e+02,
+        -3.066479806614716e+01,
+        2.506628277459239e+00,
     ];
     const B: [f64; 5] = [
-        -5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
-        6.680131188771972e+01, -1.328068155288572e+01,
+        -5.447609879822406e+01,
+        1.615858368580409e+02,
+        -1.556989798598866e+02,
+        6.680131188771972e+01,
+        -1.328068155288572e+01,
     ];
     const C: [f64; 6] = [
-        -7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
-        -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00,
+        -7.784894002430293e-03,
+        -3.223964580411365e-01,
+        -2.400758277161838e+00,
+        -2.549732539343734e+00,
+        4.374664141464968e+00,
+        2.938163982698783e+00,
     ];
     const D: [f64; 4] = [
-        7.784695709041462e-03, 3.224671290700398e-01,
-        2.445134137142996e+00, 3.754408661907416e+00,
+        7.784695709041462e-03,
+        3.224671290700398e-01,
+        2.445134137142996e+00,
+        3.754408661907416e+00,
     ];
 
     const P_LOW: f64 = 0.02425;
@@ -242,7 +269,7 @@ pub fn norm_ppf(p: f64) -> f64 {
 /// - 加工：先算 `|x|` 的上尾概率——`|x| < 7.07` 走两组 7 阶有理多项式之比，
 ///   更远的尾部走连分式；`|x| > 37` 时上尾在双精度下已是 0。最后按 `x` 的符号翻转。
 /// - 出参：`Φ(x)`，取值落在 `[0, 1]`；绝对误差约 `1e-15`。`x` 为 NaN 时返回 NaN。
-// 系数照抄 Hart / West 原文，保留其位数以便与参考实现逐位比对
+///   系数照抄 Hart / West 原文，保留其位数以便与参考实现逐位比对
 #[allow(clippy::excessive_precision)]
 pub fn norm_cdf(x: f64) -> f64 {
     if x.is_nan() {
@@ -277,7 +304,11 @@ pub fn norm_cdf(x: f64) -> f64 {
             e / cf / 2.506_628_274_631
         }
     };
-    if x > 0.0 { 1.0 - upper } else { upper }
+    if x > 0.0 {
+        1.0 - upper
+    } else {
+        upper
+    }
 }
 
 /// 分位数映射驱动，对应 Python 侧 `quantile(driver=...)` 参数。

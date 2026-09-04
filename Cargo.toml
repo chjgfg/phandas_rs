@@ -7,7 +7,7 @@ edition = "2021"
 # 注意：本机仅有 stable 1.92，未用 1.82 工具链实际验证过。
 # rust-version = "1.82"
 authors = ["GG-lyf <2083298549@qq.com>"]
-description = "Alpha factor construction and event-driven backtesting on dense panel data: 70+ cross-sectional and time-series operators, portfolio simulation with transaction costs, 11 performance metrics. Zero dependencies. Rust port of Python phandas."
+description = "Alpha factor construction, factor evaluation and event-driven backtesting on dense panel data: 70+ cross-sectional and time-series operators, cross-sectional IC with IR/t-stat, factor correlation and coverage/turnover/autocorr stats, portfolio simulation with transaction costs, 11 performance metrics. Zero dependencies. Rust port of Python phandas."
 readme = "README.md"
 repository = "https://github.com/GG-lyf/phandas_rs"
 documentation = "https://docs.rs/phandas_rs"
