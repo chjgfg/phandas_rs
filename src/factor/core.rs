@@ -105,10 +105,16 @@ impl Factor {
         let sym_set: BTreeSet<String> = records.iter().map(|(_, s, _)| s.clone()).collect();
         let timestamps: Vec<String> = ts_set.into_iter().collect();
         let symbols: Vec<String> = sym_set.into_iter().collect();
-        let ts_pos: BTreeMap<&str, usize> =
-            timestamps.iter().enumerate().map(|(i, s)| (s.as_str(), i)).collect();
-        let sym_pos: BTreeMap<&str, usize> =
-            symbols.iter().enumerate().map(|(i, s)| (s.as_str(), i)).collect();
+        let ts_pos: BTreeMap<&str, usize> = timestamps
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.as_str(), i))
+            .collect();
+        let sym_pos: BTreeMap<&str, usize> = symbols
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.as_str(), i))
+            .collect();
         let mut values = vec![f64::NAN; timestamps.len() * symbols.len()];
         for (ts, sym, v) in &records {
             values[ts_pos[ts.as_str()] * symbols.len() + sym_pos[sym.as_str()]] = *v;
@@ -206,7 +212,9 @@ impl Factor {
     /// - 出参：长度为期数的新向量。
     pub fn series(&self, si: usize) -> Vec<f64> {
         let n = self.symbols.len();
-        (0..self.timestamps.len()).map(|ti| self.values[ti * n + si]).collect()
+        (0..self.timestamps.len())
+            .map(|ti| self.values[ti * n + si])
+            .collect()
     }
 
     /// 展开为长表记录，对应 Python 侧 `to_df()` 的 (timestamp, symbol, factor) 结构。
@@ -405,7 +413,12 @@ impl Factor {
     /// - 加工：以 `min_periods = window` 调用 [`Factor::rolling`]，并额外再挡一层
     ///   "窗口未填满或含 NaN"的情况。
     /// - 出参：形状与索引不变的新因子；前 `window - 1` 期必为 NaN。
-    pub(crate) fn rolling_full(&self, window: usize, name: String, f: impl Fn(&[f64]) -> f64) -> Factor {
+    pub(crate) fn rolling_full(
+        &self,
+        window: usize,
+        name: String,
+        f: impl Fn(&[f64]) -> f64,
+    ) -> Factor {
         self.rolling(window, window, name, move |w| {
             if w.len() < window || has_nan(w) {
                 f64::NAN
@@ -456,10 +469,18 @@ impl Factor {
     /// - 加工：建立自身索引的查找表 → 按目标索引逐格取值，查不到就填 NaN。
     /// - 出参：长度为 `目标期数 × 目标标的数` 的行主序值向量。
     pub(crate) fn reindex(&self, timestamps: &[String], symbols: &[String]) -> Vec<f64> {
-        let ts_pos: BTreeMap<&str, usize> =
-            self.timestamps.iter().enumerate().map(|(i, s)| (s.as_str(), i)).collect();
-        let sym_pos: BTreeMap<&str, usize> =
-            self.symbols.iter().enumerate().map(|(i, s)| (s.as_str(), i)).collect();
+        let ts_pos: BTreeMap<&str, usize> = self
+            .timestamps
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.as_str(), i))
+            .collect();
+        let sym_pos: BTreeMap<&str, usize> = self
+            .symbols
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.as_str(), i))
+            .collect();
         let n = self.symbols.len();
         let mut out = Vec::with_capacity(timestamps.len() * symbols.len());
         for ts in timestamps {
@@ -492,7 +513,12 @@ impl Factor {
             Operand::Factor(o) => {
                 let (timestamps, symbols, a, b) = self.align(o);
                 let values = a.iter().zip(b.iter()).map(|(x, y)| f(*x, *y)).collect();
-                Factor { name, timestamps, symbols, values }
+                Factor {
+                    name,
+                    timestamps,
+                    symbols,
+                    values,
+                }
             }
             Operand::Scalar(v) => self.map_values(name, |x| f(x, v)),
         }

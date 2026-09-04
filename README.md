@@ -11,7 +11,7 @@ simulation with transaction costs, 11 performance metrics, zero dependencies. A 
 port of the Python [phandas](https://github.com/quantbai/phandas) engine.
 
 因子构造 + 因子评价 + 回测库：把 Python 版 phandas 的 `Factor` / `Panel` 与全部因子运算子、
-因子评价器 `FactorAnalyzer`、以及事件驱动回测引擎移植到 Rust，**零外部依赖**（分位数反函数
+因子评价器 `FactorAnalyzer`、以及事件驱动回测引擎移植到 Rust，**默认零外部依赖**（分位数反函数
 与 CDF、最小二乘、条件数估计、CSV 解析、日期运算、相关系数全部自带实现）。
 
 - [`factor`](https://docs.rs/phandas_rs/latest/phandas_rs/factor/) —— 因子构造，对应上游
@@ -21,7 +21,7 @@ port of the Python [phandas](https://github.com/quantbai/phandas) engine.
 - [`analysis`](https://docs.rs/phandas_rs/latest/phandas_rs/analysis/) —— 因子评价，对应上游
   `analysis.py`（横截面 IC / IR / t 值、因子相关矩阵、覆盖率 / 换手率 / 自相关）。
 
-上游的行情抓取、绘图与实盘下单未移植，它们各自绑定 ccxt / matplotlib / python-okx。
+行情抓取见下面的 `data` feature（直打 Binance REST，不用 ccxt）。上游的绘图与 MCP server 未移植。
 
 ## 安装
 
@@ -99,6 +99,50 @@ println!(
 );
 ```
 
+## 抓行情（可选 feature）
+
+默认构建零依赖。要联网抓 Binance 行情，开 `data` feature：
+
+```toml
+phandas_rs = { version = "0.1", features = ["data"] }
+```
+
+不用 ccxt，直接打 `/api/v3/klines` 与 `/api/v3/exchangeInfo` 两个公开端点，无需 API key。
+公开 API 是 `async` 的，运行时由调用方提供（`reqwest` 要求 tokio）：
+
+```rust
+use phandas_rs::data::{fetch_data, Source, Timeframe};
+
+let panel = fetch_data(
+    &["ETH", "SOL", "ARB"],
+    Timeframe::D1,
+    Some("2024-01-01"),
+    Some("2024-06-30"),
+    &[Source::Binance, Source::Vwap],   // 空切片等同 [Source::Binance]
+).await?;
+
+let close = panel.factor("close")?;    // 直接接进上面的因子链路
+```
+
+四个源：`Binance`（OHLCV 五列）、`Benchmark`（`BTC_close` / `ETH_close` 广播到每个标的）、
+`Calendar`（年月日 / 周内第几天 / 旬 / 是否周末，纯计算不联网）、`Vwap`。
+网络那一层是 `net::HttpTransport` trait，想换 TLS 栈、改重试策略、走自定义代理，自己实现一个传进
+`BinanceClient` 即可。默认已经带 2 次重试（走代理时响应体读一半断掉不算罕见）。
+
+要走代理，仓库根放一个 `.env`（照 `.env.example` 抄，已在 `.gitignore` 里）：
+
+```text
+HTTPS_PROXY=http://127.0.0.1:7897
+```
+
+然后在 `main` 最前面调一次 `net::load_default_dotenv()`。服务器上不放这个文件即直连，
+两边同一份代码；真实环境变量优先于 `.env`。
+
+口径与上游 `data.py` 一致，含几条容易踩的：`start_date = None` 只给**最近 1000 根**而非全量历史；
+`end_date` 按当日 `00:00:00Z` 解释，日内周期下最后一天只留 00:00 那一根；对齐以 `close` 为准，
+起点取各标的首个有效收盘的**最大值**（加一个晚上市的标的会砍掉整篮子的历史）；缺口做**无界**
+前向填充。上游几处会挂死或静默丢数据的 bug 已修，清单见 `docs/上游能力清单与移植对照.md` 4.3。
+
 `ic_series` / `ic_stats`、相关系数 `corr` 与 `CorrMatrix` 都能脱离 `FactorAnalyzer` 单独使用，
 数字口径逐格对齐上游 `analysis.py`（含 `ic_std` 用 numpy 的 `ddof = 0`、`turnover` 是
 "先按标的取均值、再对标的取均值"的两级平均而非池化平均等细节）。Kendall 相关照 scipy 用
@@ -162,7 +206,7 @@ cargo run --release --example smoke -- path/to/crypto_1d.csv
 
 ## MSRV
 
-Rust 1.82。
+默认构建 Rust 1.82；开 `data` feature 时 1.85（`reqwest` 的要求）。
 
 ## License
 

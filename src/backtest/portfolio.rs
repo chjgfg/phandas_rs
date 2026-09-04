@@ -91,7 +91,11 @@ impl Portfolio {
         date: &str,
     ) {
         let trade_value = quantity * price;
-        let rate = if quantity > 0.0 { cost_rates.0 } else { cost_rates.1 };
+        let rate = if quantity > 0.0 {
+            cost_rates.0
+        } else {
+            cost_rates.1
+        };
         let cost = trade_value.abs() * rate;
 
         self.cash -= trade_value + cost;

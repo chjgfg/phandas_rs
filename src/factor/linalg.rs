@@ -82,7 +82,11 @@ fn solve_linear(a: &[Vec<f64>], b: &[f64]) -> Option<Vec<f64>> {
     for col in 0..n {
         let (pivot, _) = (col..n).fold((col, 0.0), |(bi, bv), r| {
             let v = m[r][col].abs();
-            if v > bv { (r, v) } else { (bi, bv) }
+            if v > bv {
+                (r, v)
+            } else {
+                (bi, bv)
+            }
         });
         if m[pivot][col].abs() < 1e-300 {
             return None;
@@ -130,7 +134,11 @@ pub(crate) fn invert(a: &[Vec<f64>]) -> Option<Vec<Vec<f64>>> {
     for col in 0..n {
         let (pivot, _) = (col..n).fold((col, 0.0), |(bi, bv), r| {
             let v = m[r][col].abs();
-            if v > bv { (r, v) } else { (bi, bv) }
+            if v > bv {
+                (r, v)
+            } else {
+                (bi, bv)
+            }
         });
         if m[pivot][col].abs() < 1e-300 {
             return None;

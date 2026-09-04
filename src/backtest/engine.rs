@@ -128,7 +128,11 @@ impl Backtester {
             .iter()
             .map(|ts| (ts.clone(), strategy.is_signal(Some(ts))))
             .collect();
-        let price_dates: BTreeSet<&str> = entry_price.timestamps().iter().map(String::as_str).collect();
+        let price_dates: BTreeSet<&str> = entry_price
+            .timestamps()
+            .iter()
+            .map(String::as_str)
+            .collect();
         let common_dates = strategy
             .timestamps()
             .iter()
@@ -232,8 +236,13 @@ impl Backtester {
             if self.full_rebalance {
                 for (symbol, qty) in self.portfolio.positions().clone() {
                     if let Some(px) = prices.get(&symbol) {
-                        self.portfolio
-                            .execute_trade(&symbol, -qty, *px, self.cost_rates, &current_date);
+                        self.portfolio.execute_trade(
+                            &symbol,
+                            -qty,
+                            *px,
+                            self.cost_rates,
+                            &current_date,
+                        );
                     }
                 }
                 // 只重估、不再记一条净值：上游此处会写第二条，导致同一天两个净值
@@ -329,9 +338,11 @@ impl Backtester {
         let symbols: BTreeSet<&String> = target.keys().chain(current.keys()).collect();
         let mut orders = Cross::new();
         for symbol in symbols {
-            let Some(px) = prices.get(symbol) else { continue };
-            let trade_value =
-                target.get(symbol).copied().unwrap_or(0.0) - current.get(symbol).copied().unwrap_or(0.0);
+            let Some(px) = prices.get(symbol) else {
+                continue;
+            };
+            let trade_value = target.get(symbol).copied().unwrap_or(0.0)
+                - current.get(symbol).copied().unwrap_or(0.0);
             if trade_value.abs() > 1e-10 {
                 orders.insert(symbol.clone(), trade_value / px);
             }
@@ -377,8 +388,11 @@ impl Backtester {
         for t in self.portfolio.trade_log() {
             *daily.entry(t.date.as_str()).or_insert(0.0) += t.trade_value.abs();
         }
-        let nav: BTreeMap<&str, f64> =
-            self.equity().iter().map(|(d, v)| (d.as_str(), *v)).collect();
+        let nav: BTreeMap<&str, f64> = self
+            .equity()
+            .iter()
+            .map(|(d, v)| (d.as_str(), *v))
+            .collect();
         daily
             .into_iter()
             .filter_map(|(d, tv)| nav.get(d).map(|v| (d.to_string(), tv / v)))

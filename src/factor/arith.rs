@@ -75,13 +75,16 @@ impl Factor {
                     ));
                 }
                 let name = format!("log({},base={})", self.name, fmt_num(b));
-                Ok(self.map_values(name, move |x| {
-                    if x > 0.0 {
-                        x.ln() / b.ln()
-                    } else {
-                        f64::NAN
-                    }
-                }))
+                Ok(self.map_values(
+                    name,
+                    move |x| {
+                        if x > 0.0 {
+                            x.ln() / b.ln()
+                        } else {
+                            f64::NAN
+                        }
+                    },
+                ))
             }
         }
     }
@@ -283,14 +286,24 @@ impl Factor {
                 let values = (0..xs.len())
                     .map(|i| if truthy(cs[i]) { xs[i] } else { os[i] })
                     .collect();
-                Factor { name, timestamps, symbols, values }
+                Factor {
+                    name,
+                    timestamps,
+                    symbols,
+                    values,
+                }
             }
             Operand::Scalar(v) => {
                 let (timestamps, symbols, xs, cs) = self.align(cond);
                 let values = (0..xs.len())
                     .map(|i| if truthy(cs[i]) { xs[i] } else { v })
                     .collect();
-                Factor { name, timestamps, symbols, values }
+                Factor {
+                    name,
+                    timestamps,
+                    symbols,
+                    values,
+                }
             }
         }
     }
@@ -301,7 +314,12 @@ impl Factor {
     /// - 加工：套用 [`Factor::combine`]，把布尔结果编码成 `1.0` / `0.0`。
     ///   NaN 参与的比较在 IEEE 语义下恒为假，故输出 `0.0`。
     /// - 出参：只含 `1.0` / `0.0` 的新因子，可直接当 [`Factor::where_cond`] 的条件。
-    fn compare<'a>(&self, other: impl Into<Operand<'a>>, op: &str, f: impl Fn(f64, f64) -> bool) -> Factor {
+    fn compare<'a>(
+        &self,
+        other: impl Into<Operand<'a>>,
+        op: &str,
+        f: impl Fn(f64, f64) -> bool,
+    ) -> Factor {
         let me = self.name.clone();
         self.combine(
             other,

@@ -74,7 +74,11 @@ fn equity_from_returns(returns: &[(String, f64)]) -> Vec<f64> {
 /// - 出参：按 `depth` 升序（最深在前）的区间列表。
 pub fn identify_drawdown_periods(dates: &[String], equity: &[f64]) -> Vec<DrawdownPeriod> {
     let peaks = cummax(equity);
-    let dd: Vec<f64> = equity.iter().zip(peaks.iter()).map(|(e, p)| e / p - 1.0).collect();
+    let dd: Vec<f64> = equity
+        .iter()
+        .zip(peaks.iter())
+        .map(|(e, p)| e / p - 1.0)
+        .collect();
 
     let mut periods: Vec<DrawdownPeriod> = Vec::new();
     let mut start: Option<usize> = None;
@@ -99,7 +103,11 @@ pub fn identify_drawdown_periods(dates: &[String], equity: &[f64]) -> Vec<Drawdo
     if let Some(s) = start {
         push(&mut periods, s, dd.len() - 1);
     }
-    periods.sort_by(|a, b| a.depth.partial_cmp(&b.depth).unwrap_or(std::cmp::Ordering::Equal));
+    periods.sort_by(|a, b| {
+        a.depth
+            .partial_cmp(&b.depth)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     periods
 }
 

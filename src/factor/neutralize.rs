@@ -26,7 +26,9 @@ impl Factor {
         for ti in 0..timestamps.len() {
             let x = &xs[ti * n..(ti + 1) * n];
             let y = &ys[ti * n..(ti + 1) * n];
-            let valid: Vec<usize> = (0..n).filter(|&j| !x[j].is_nan() && !y[j].is_nan()).collect();
+            let valid: Vec<usize> = (0..n)
+                .filter(|&j| !x[j].is_nan() && !y[j].is_nan())
+                .collect();
             if valid.len() < 2 {
                 continue;
             }
@@ -123,10 +125,19 @@ impl Factor {
                 continue;
             };
             for (k, &j) in valid.iter().enumerate() {
-                let fitted: f64 = design[k].iter().zip(params.iter()).map(|(a, b)| a * b).sum();
+                let fitted: f64 = design[k]
+                    .iter()
+                    .zip(params.iter())
+                    .map(|(a, b)| a * b)
+                    .sum();
                 values[base + j] = yv[k] - fitted;
             }
         }
-        Factor { name, timestamps, symbols, values }
+        Factor {
+            name,
+            timestamps,
+            symbols,
+            values,
+        }
     }
 }

@@ -65,8 +65,8 @@ mod group;
 mod linalg;
 mod neutralize;
 pub mod numeric;
-mod ops;
 mod operators;
+mod ops;
 mod panel;
 mod ts;
 

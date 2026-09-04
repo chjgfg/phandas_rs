@@ -1,6 +1,8 @@
 //! 横截面运算子（逐 timestamp），对应 Python 侧 `_apply_cs_operation` 家族。
 
-use super::constants::{EPSILON, SIGNAL_LONG_SUM, SIGNAL_SHORT_SUM, SIGNAL_TOLERANCE, TOLERANCE_FLOAT};
+use super::constants::{
+    EPSILON, SIGNAL_LONG_SUM, SIGNAL_SHORT_SUM, SIGNAL_TOLERANCE, TOLERANCE_FLOAT,
+};
 use super::core::Factor;
 use super::numeric::{
     argsort_stable, count_valid, fmt_num, has_nan, nanmean, nanmedian, nanstd, rank_pct, Driver,
@@ -105,7 +107,8 @@ impl Factor {
     /// - 加工：逐期减均值再除以样本标准差。
     /// - 出参：同形状因子，每期均值 0、标准差 1，名为 `zscore(<原名>)`。
     pub fn zscore(&self) -> Factor {
-        self.normalize(true, 0.0).rename(&format!("zscore({})", self.name))
+        self.normalize(true, 0.0)
+            .rename(&format!("zscore({})", self.name))
     }
 
     /// 横截面缩放：默认按绝对值和归一到 `scale`；给定多空比例时分别归一。

@@ -60,11 +60,11 @@ impl CorrMethod {
 ///
 /// - 入参：`x` / `y` 等长的数值切片（调用方通常已剔除 NaN）；`method` 相关系数口径。
 /// - 加工：Pearson 走 [`pearson_r`]；Spearman 先把两侧各自换成平均名次百分位
-///   （名次整体缩放不改变相关系数，故直接用 [`rank_pct`]）再走 Pearson；
-///   Kendall 走 [`kendall_tau_b`]。
+///   （名次整体缩放不改变相关系数，故直接用 `rank_pct`）再走 Pearson；
+///   Kendall 走 `kendall_tau_b`（本文件内的私有实现）。
 /// - 出参：相关系数，落在 `[-1, 1]`；长度不足 2、长度不等、任一侧无波动或**任一侧含 NaN**
 ///   时返回 NaN（pandas 在这些输入上同样给 NaN）。三个口径遇 NaN 的行为一致：
-///   Pearson / Spearman 由 NaN 自然传播，Kendall 在 [`kendall_tau_b`] 里显式挡掉。
+///   Pearson / Spearman 由 NaN 自然传播，Kendall 在 `kendall_tau_b` 里显式挡掉。
 pub fn corr(x: &[f64], y: &[f64], method: CorrMethod) -> f64 {
     if x.len() != y.len() || x.len() < 2 {
         return f64::NAN;

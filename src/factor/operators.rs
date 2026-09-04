@@ -294,13 +294,7 @@ pub fn ts_covariance(factor1: &Factor, factor2: &Factor, window: usize) -> Facto
 
 /// 滚动线性回归：`y` 因变量、`x` 自变量、`window` 窗口期数、`lag` 自变量滞后、
 /// `rettype` 输出选择 → 含义随 `rettype` 变化的因子。详见 [`Factor::ts_regression`]。
-pub fn ts_regression(
-    y: &Factor,
-    x: &Factor,
-    window: usize,
-    lag: usize,
-    rettype: i32,
-) -> Factor {
+pub fn ts_regression(y: &Factor, x: &Factor, window: usize, lag: usize, rettype: i32) -> Factor {
     y.ts_regression(&[x], window, lag, rettype)
 }
 

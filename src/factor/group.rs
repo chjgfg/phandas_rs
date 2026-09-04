@@ -23,7 +23,9 @@ impl Factor {
             .iter()
             .map(|s| mapping.get(s).copied().unwrap_or(f64::NAN))
             .collect();
-        let values = (0..self.timestamps.len()).flat_map(|_| row.iter().copied()).collect();
+        let values = (0..self.timestamps.len())
+            .flat_map(|_| row.iter().copied())
+            .collect();
         self.like(values, name.unwrap_or("group(custom_map)").to_string())
     }
 
@@ -34,7 +36,9 @@ impl Factor {
     /// - 出参：`Ok(组号因子)`，名形如 `group(SECTOR_L1_L2)`；方案名未知时返回 `Err`。
     pub fn group_named(&self, mapping: &str) -> Result<Factor, String> {
         let dict = group_definitions(mapping).ok_or_else(|| {
-            format!("Unknown mapping name '{mapping}'. Available: ['SECTOR_L1_L2', 'DAPP_ACTIVITY']")
+            format!(
+                "Unknown mapping name '{mapping}'. Available: ['SECTOR_L1_L2', 'DAPP_ACTIVITY']"
+            )
         })?;
         Ok(self.group_map(&dict, Some(&format!("group({mapping})"))))
     }
@@ -46,12 +50,7 @@ impl Factor {
     /// - 加工：对齐两者索引 → 逐期按组号（以 f64 位模式为键）分桶 → 每桶的值交给 `f`
     ///   → 结果按原下标写回。组号为 NaN 的标的不进任何桶，输出保持 NaN。
     /// - 出参：同交集形状的新因子。debug 构建下会断言 `f` 的返回长度。
-    fn by_group(
-        &self,
-        group: &Factor,
-        name: String,
-        f: impl Fn(&[f64]) -> Vec<f64>,
-    ) -> Factor {
+    fn by_group(&self, group: &Factor, name: String, f: impl Fn(&[f64]) -> Vec<f64>) -> Factor {
         let (timestamps, symbols, xs, gs) = self.align(group);
         let n = symbols.len();
         let mut values = vec![f64::NAN; xs.len()];
@@ -75,7 +74,12 @@ impl Factor {
                 }
             }
         }
-        Factor { name, timestamps, symbols, values }
+        Factor {
+            name,
+            timestamps,
+            symbols,
+            values,
+        }
     }
 
     /// 组内去均值，对应 Python 侧 `group_neutralize()`。

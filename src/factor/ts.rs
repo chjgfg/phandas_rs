@@ -21,7 +21,13 @@ impl Factor {
     pub fn ts_delay(&self, window: usize) -> Factor {
         self.map_series(format!("ts_delay({},{})", self.name, window), move |col| {
             (0..col.len())
-                .map(|i| if i >= window { col[i - window] } else { f64::NAN })
+                .map(|i| {
+                    if i >= window {
+                        col[i - window]
+                    } else {
+                        f64::NAN
+                    }
+                })
                 .collect()
         })
     }
@@ -34,7 +40,13 @@ impl Factor {
     pub fn ts_delta(&self, window: usize) -> Factor {
         self.map_series(format!("ts_delta({},{})", self.name, window), move |col| {
             (0..col.len())
-                .map(|i| if i >= window { col[i] - col[i - window] } else { f64::NAN })
+                .map(|i| {
+                    if i >= window {
+                        col[i] - col[i - window]
+                    } else {
+                        f64::NAN
+                    }
+                })
                 .collect()
         })
     }
@@ -70,9 +82,11 @@ impl Factor {
     /// - 加工：逐标的取干净窗口后连乘。
     /// - 出参：同形状因子，前 `window - 1` 期为 NaN。常用于把逐期收益率连乘成累计收益。
     pub fn ts_product(&self, window: usize) -> Factor {
-        self.rolling_full(window, format!("ts_product({},{})", self.name, window), |w| {
-            w.iter().product()
-        })
+        self.rolling_full(
+            window,
+            format!("ts_product({},{})", self.name, window),
+            |w| w.iter().product(),
+        )
     }
 
     /// 滚动均值，对应 Python 侧 `ts_mean()`。
@@ -92,7 +106,11 @@ impl Factor {
     /// - 加工：逐标的取干净窗口后求中位数。
     /// - 出参：同形状因子，前 `window - 1` 期为 NaN；比移动平均更抗单期跳空。
     pub fn ts_median(&self, window: usize) -> Factor {
-        self.rolling_full(window, format!("ts_median({},{})", self.name, window), nanmedian)
+        self.rolling_full(
+            window,
+            format!("ts_median({},{})", self.name, window),
+            nanmedian,
+        )
     }
 
     /// 滚动标准差（`ddof = 1`），对应 Python 侧 `ts_std_dev()`。
@@ -101,9 +119,11 @@ impl Factor {
     /// - 加工：逐标的取干净窗口后求样本标准差。
     /// - 出参：同形状的波动率因子，前 `window - 1` 期为 NaN。
     pub fn ts_std_dev(&self, window: usize) -> Factor {
-        self.rolling_full(window, format!("ts_std_dev({},{})", self.name, window), |w| {
-            nanstd(w, 1)
-        })
+        self.rolling_full(
+            window,
+            format!("ts_std_dev({},{})", self.name, window),
+            |w| nanstd(w, 1),
+        )
     }
 
     /// 滚动最小值，对应 Python 侧 `ts_min()`。
@@ -130,15 +150,19 @@ impl Factor {
     /// - 加工：逐标的取干净窗口 → 找最大值位置（并列取最早）→ 换算成"距窗口末端的距离"。
     /// - 出参：同形状因子，取值落在 `[0, window - 1]`，衡量"高点出现在多久以前"。
     pub fn ts_arg_max(&self, window: usize) -> Factor {
-        self.rolling_full(window, format!("ts_arg_max({},{})", self.name, window), |w| {
-            let mut best = 0usize;
-            for i in 1..w.len() {
-                if w[i] > w[best] {
-                    best = i;
+        self.rolling_full(
+            window,
+            format!("ts_arg_max({},{})", self.name, window),
+            |w| {
+                let mut best = 0usize;
+                for i in 1..w.len() {
+                    if w[i] > w[best] {
+                        best = i;
+                    }
                 }
-            }
-            (w.len() - 1 - best) as f64
-        })
+                (w.len() - 1 - best) as f64
+            },
+        )
     }
 
     /// 窗口内最小值距当期的期数，对应 Python 侧 `ts_arg_min()`。
@@ -147,15 +171,19 @@ impl Factor {
     /// - 加工：逐标的取干净窗口 → 找最小值位置（并列取最早）→ 换算成距窗口末端的距离。
     /// - 出参：同形状因子，取值落在 `[0, window - 1]`，衡量"低点出现在多久以前"。
     pub fn ts_arg_min(&self, window: usize) -> Factor {
-        self.rolling_full(window, format!("ts_arg_min({},{})", self.name, window), |w| {
-            let mut best = 0usize;
-            for i in 1..w.len() {
-                if w[i] < w[best] {
-                    best = i;
+        self.rolling_full(
+            window,
+            format!("ts_arg_min({},{})", self.name, window),
+            |w| {
+                let mut best = 0usize;
+                for i in 1..w.len() {
+                    if w[i] < w[best] {
+                        best = i;
+                    }
                 }
-            }
-            (w.len() - 1 - best) as f64
-        })
+                (w.len() - 1 - best) as f64
+            },
+        )
     }
 
     /// 窗口内 NaN 个数，对应 Python 侧 `ts_count_nans()`。
@@ -248,12 +276,7 @@ impl Factor {
     ///   名形如 `ts_quantile(close,30,gaussian)`。
     pub fn ts_quantile(&self, window: usize, driver: Driver) -> Factor {
         let ranked = self.ts_rank(window);
-        let name = format!(
-            "ts_quantile({},{},{})",
-            self.name,
-            window,
-            driver.label()
-        );
+        let name = format!("ts_quantile({},{},{})", self.name, window, driver.label());
         ranked.map_values(name, move |r| {
             if r.is_nan() {
                 f64::NAN
@@ -270,18 +293,22 @@ impl Factor {
     ///   → 否则算 `四阶中心矩 / 标准差⁴ − 3`。
     /// - 出参：同形状因子，正值表示比正态分布更"尖峰厚尾"（极端行情更频繁）。
     pub fn ts_kurtosis(&self, window: usize) -> Factor {
-        self.rolling_full(window, format!("ts_kurtosis({},{})", self.name, window), |w| {
-            if w.windows(2).all(|p| p[0] == p[1]) {
-                return f64::NAN;
-            }
-            let m = nanmean(w);
-            let sd = nanstd(w, 0);
-            if sd < EPSILON {
-                return f64::NAN;
-            }
-            let m4: f64 = w.iter().map(|x| (x - m).powi(4)).sum::<f64>() / w.len() as f64;
-            m4 / sd.powi(4) - 3.0
-        })
+        self.rolling_full(
+            window,
+            format!("ts_kurtosis({},{})", self.name, window),
+            |w| {
+                if w.windows(2).all(|p| p[0] == p[1]) {
+                    return f64::NAN;
+                }
+                let m = nanmean(w);
+                let sd = nanstd(w, 0);
+                if sd < EPSILON {
+                    return f64::NAN;
+                }
+                let m4: f64 = w.iter().map(|x| (x - m).powi(4)).sum::<f64>() / w.len() as f64;
+                m4 / sd.powi(4) - 3.0
+            },
+        )
     }
 
     /// 滚动样本偏度，对应 Python 侧 `ts_skewness()`（按其算子组合方式实现）。
@@ -425,8 +452,7 @@ impl Factor {
                     let start = (i + 1).saturating_sub(window);
                     let w = &col[start..=i];
                     // 权重与"由旧到新"的窗口对齐，最早一期权重最大（复刻 Python 行为）
-                    let weights: Vec<f64> =
-                        (1..=w.len()).rev().map(|j| j as f64).collect();
+                    let weights: Vec<f64> = (1..=w.len()).rev().map(|j| j as f64).collect();
                     let (mut ws, mut wsum) = (0.0, 0.0);
                     if dense {
                         if count_valid(w) == 0 {
@@ -519,7 +545,12 @@ impl Factor {
                 values[i * n + si] = f(xw, yw);
             }
         }
-        Factor { name, timestamps, symbols, values }
+        Factor {
+            name,
+            timestamps,
+            symbols,
+            values,
+        }
     }
 
     /// 滚动自相关：当期序列与其滞后 `lag` 期序列的相关系数。对应 Python 侧 `ts_autocorr()`。
@@ -575,7 +606,13 @@ impl Factor {
         // 自变量先按 symbol 滞后，再统一对齐到共同索引
         let lagged: Vec<Factor> = x_factors
             .iter()
-            .map(|f| if lag > 0 { f.ts_delay(lag) } else { (*f).clone() })
+            .map(|f| {
+                if lag > 0 {
+                    f.ts_delay(lag)
+                } else {
+                    (*f).clone()
+                }
+            })
             .collect();
         let mut timestamps = self.timestamps.clone();
         let mut symbols = self.symbols.clone();
@@ -591,7 +628,10 @@ impl Factor {
             symbols = sy;
         }
         let y_all = self.reindex(&timestamps, &symbols);
-        let x_all: Vec<Vec<f64>> = lagged.iter().map(|f| f.reindex(&timestamps, &symbols)).collect();
+        let x_all: Vec<Vec<f64>> = lagged
+            .iter()
+            .map(|f| f.reindex(&timestamps, &symbols))
+            .collect();
 
         let n = symbols.len();
         let t = timestamps.len();
@@ -605,8 +645,7 @@ impl Factor {
                 }
                 let rows: Vec<usize> = (i + 1 - window..=i)
                     .filter(|&r| {
-                        !y_all[r * n + si].is_nan()
-                            && x_all.iter().all(|x| !x[r * n + si].is_nan())
+                        !y_all[r * n + si].is_nan() && x_all.iter().all(|x| !x[r * n + si].is_nan())
                     })
                     .collect();
                 if rows.len() < m + 2 {
@@ -680,7 +719,12 @@ impl Factor {
                 }
             }
         }
-        Factor { name, timestamps, symbols, values }
+        Factor {
+            name,
+            timestamps,
+            symbols,
+            values,
+        }
     }
 
     /// 滚动变异系数：标准差与均值绝对值之比，对应 Python 侧 `ts_cv()`。
@@ -706,10 +750,7 @@ impl Factor {
         let total_jump = self.ts_delta(1).abs().ts_sum(window);
         let range = self.ts_max(window).subtract(&self.ts_min(window));
         let ratio = total_jump.divide(&range.add(EPSILON));
-        ratio.map_values(
-            format!("ts_jumpiness({},{})", self.name, window),
-            clean_inf,
-        )
+        ratio.map_values(format!("ts_jumpiness({},{})", self.name, window), clean_inf)
     }
 
     /// 滚动趋势强度：对时间序号回归的 R²，对应 Python 侧 `ts_trend_strength()`。

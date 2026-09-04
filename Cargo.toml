@@ -7,7 +7,7 @@ edition = "2021"
 # 注意：本机仅有 stable 1.92，未用 1.82 工具链实际验证过。
 # rust-version = "1.82"
 authors = ["GG-lyf <2083298549@qq.com>"]
-description = "Alpha factor construction, factor evaluation and event-driven backtesting on dense panel data: 70+ cross-sectional and time-series operators, cross-sectional IC with IR/t-stat, factor correlation and coverage/turnover/autocorr stats, portfolio simulation with transaction costs, 11 performance metrics. Zero dependencies. Rust port of Python phandas."
+description = "Alpha factor construction, factor evaluation and event-driven backtesting on dense panel data: 70+ cross-sectional and time-series operators, cross-sectional IC with IR/t-stat, factor correlation and coverage/turnover/autocorr stats, portfolio simulation with transaction costs, 11 performance metrics. Zero dependencies by default; optional Binance market-data fetching. Rust port of Python phandas."
 readme = "README.md"
 repository = "https://github.com/GG-lyf/phandas_rs"
 documentation = "https://docs.rs/phandas_rs"
@@ -36,9 +36,39 @@ path = "src/lib.rs"
 name = "phandas-demo"
 path = "src/main.rs"
 
-# 刻意保持为空：分位数反函数、最小二乘、条件数估计、CSV 解析都在 src/factor/ 内实现。
-# 日后引入 rayon 之类的并行后端时，请放在可选 feature 后面，别破坏零依赖这个卖点。
+# 默认零依赖：分位数反函数、最小二乘、条件数估计、CSV 解析都在 src/factor/ 内实现。
+# 联网的两个模块放在可选 feature 后面——`cargo build` 不开 feature 时依赖表仍然是空的。
+# 日后引入 rayon 之类的并行后端时同样照此处理，别破坏零依赖这个卖点。
+[features]
+default = []
+# Binance 行情抓取（src/data/）
+data = ["_net"]
+# OKX 永续下单（src/trader/），多签名要用的三件套
+trader = ["_net", "dep:hmac", "dep:sha2", "dep:base64"]
+# 内部 feature：data 与 trader 共用的 HTTP + JSON 底座（src/net/）
+_net = ["dep:reqwest", "dep:serde_json", "dep:tokio"]
+
+# 只在开 data / trader 时才会被拉进来。
+# 注意：reqwest 0.13 的 MSRV 是 1.85，高于默认构建的 1.82——开了这两个 feature 的 MSRV 随之抬到 1.85。
+# system-proxy 保留：交易所端点常需走代理，reqwest 据此读 HTTPS_PROXY / HTTP_PROXY。
+# tokio 只要 time：分页之间要按限频节流。reqwest 的异步客户端本身就要求 tokio 运行时，
+# 所以显式依赖它并不会多引入任何约束，只是让 sleep 用得上。
 [dependencies]
+reqwest = { version = "0.13", optional = true, default-features = false, features = [
+    "rustls",
+    "http2",
+    "system-proxy",
+] }
+serde_json = { version = "1", optional = true }
+tokio = { version = "1", optional = true, default-features = false, features = ["time"] }
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+base64 = { version = "0.22", optional = true }
+
+# tokio 的 macros / rt 只作开发依赖：库里的 async fn 由调用方的运行时驱动，
+# 不替调用方选运行时。这份多出来的两个 feature 只服务 #[tokio::test]。
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 # 仅在 phandas_rs 作为根 crate 构建时生效（被别人当依赖时会被忽略）。
 # 主要服务 `cargo run --example smoke --release` 里的耗时测量。

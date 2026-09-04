@@ -25,13 +25,21 @@ pub fn group_definitions(name: &str) -> Option<BTreeMap<String, f64>> {
     let pairs: &[(&str, f64)] = match name {
         // Group 1: L1，Group 2: L2
         "SECTOR_L1_L2" => &[
-            ("ETH", 1.0), ("SOL", 1.0), ("SUI", 1.0),
-            ("ARB", 2.0), ("OP", 2.0), ("POL", 2.0),
+            ("ETH", 1.0),
+            ("SOL", 1.0),
+            ("SUI", 1.0),
+            ("ARB", 2.0),
+            ("OP", 2.0),
+            ("POL", 2.0),
         ],
         // Group 1: High TVL/Dapps，Group 2: Growth/Alt
         "DAPP_ACTIVITY" => &[
-            ("POL", 1.0), ("ETH", 1.0), ("ARB", 1.0), ("OP", 1.0),
-            ("SUI", 2.0), ("SOL", 2.0),
+            ("POL", 1.0),
+            ("ETH", 1.0),
+            ("ARB", 1.0),
+            ("OP", 1.0),
+            ("SUI", 2.0),
+            ("SOL", 2.0),
         ],
         _ => return None,
     };

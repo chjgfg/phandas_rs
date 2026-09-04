@@ -31,7 +31,7 @@
 //!   （例如只有 1 期、或差分整块全 NaN），本仓库同。
 //! - [`FactorAnalyzer::correlation`] 的对角线：pandas 的 `method='kendall'` 不走
 //!   `nancorr` 而走 `nanops` 的逐对循环，把 `i == j` **硬编码成 `1.0`**；Pearson /
-//!   Spearman 走 `nancorr`，常量列的对角线是 NaN。本仓库同——[`corr`] 本身仍按 scipy 给
+//!   Spearman 走 `nancorr`，常量列的对角线是 NaN。本仓库同——[`corr()`] 本身仍按 scipy 给
 //!   NaN，这个 `1.0` 只在 `correlation()` 这一层补。
 //! - 上游三个输出区（IC / IR / 统计）排版为 18 字符因子名列 + 12 字符数值列，
 //!   `summary()` 返回字符串而非打印，与 [`crate::factor::Factor::info`] /
@@ -275,7 +275,7 @@ impl<'a> FactorAnalyzer<'a> {
     ///
     /// - 入参：无。
     /// - 加工：逐因子算非 NaN 占比、百分位名次换手率、滞后 1 自相关均值（见
-    ///   [`factor_stats`]）。
+    ///   `factor_stats`）。
     /// - 出参：按因子顺序排列的 [`FactorStats`]。
     pub fn stats(&self) -> Vec<FactorStats> {
         self.factors

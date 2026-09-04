@@ -55,5 +55,7 @@ mod portfolio;
 pub mod stats;
 
 pub use self::engine::{backtest, Backtester, Neutralization};
-pub use self::metrics::{identify_drawdown_periods, performance_metrics, psr, DrawdownPeriod, Metrics};
+pub use self::metrics::{
+    identify_drawdown_periods, performance_metrics, psr, DrawdownPeriod, Metrics,
+};
 pub use self::portfolio::{Portfolio, Trade};
