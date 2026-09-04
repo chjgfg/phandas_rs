@@ -36,6 +36,12 @@ path = "src/lib.rs"
 name = "phandas-demo"
 path = "src/main.rs"
 
+# examples/pipeline.rs 演示「抓数 → 造因子 → 评价 → 回测 → 实盘」整条流水线，
+# 前四步要 data、第五步要 trader。声明 required-features，免得默认构建时它编不过。
+[[example]]
+name = "pipeline"
+required-features = ["data"]
+
 # 默认零依赖：分位数反函数、最小二乘、条件数估计、CSV 解析都在 src/factor/ 内实现。
 # 联网的两个模块放在可选 feature 后面——`cargo build` 不开 feature 时依赖表仍然是空的。
 # 日后引入 rayon 之类的并行后端时同样照此处理，别破坏零依赖这个卖点。

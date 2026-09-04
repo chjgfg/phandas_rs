@@ -9,7 +9,10 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::backtest::date::{civil_from_days, days_from_civil, days_in_month, parse_days};
+use crate::backtest::date::{civil_from_days, parse_days};
+// 只有 data 用得到自然月进位，故连它依赖的两个日期函数一起按 feature 引入
+#[cfg(feature = "data")]
+use crate::backtest::date::{days_from_civil, days_in_month};
 
 /// 一天的毫秒数。
 const MS_PER_DAY: i64 = 86_400_000;
@@ -41,6 +44,7 @@ pub(crate) fn split_millis(ms: i64) -> (i64, i64, i64, i64, i64, i64, i64) {
 /// - 加工：1970-01-01 是星期四（周一记 0 时为 3），故 `(天数 + 3) mod 7`。
 /// - 出参：`0`（周一）到 `6`（周日）。日历列的 `dayofweek` 是它 `+ 1`
 ///   （上游 `date.dayofweek + 1`，周一记 1）。
+#[cfg(feature = "data")]
 pub(crate) fn weekday_mon0(ms: i64) -> i64 {
     (ms.div_euclid(MS_PER_DAY) + 3).rem_euclid(7)
 }
@@ -50,6 +54,7 @@ pub(crate) fn weekday_mon0(ms: i64) -> i64 {
 /// - 入参：`ms` epoch 毫秒。
 /// - 加工：按一天的毫秒数向下取整。
 /// - 出参：当日零点的毫秒。VWAP 按自然日聚合要用它。
+#[cfg(feature = "data")]
 pub(crate) fn floor_to_day(ms: i64) -> i64 {
     ms.div_euclid(MS_PER_DAY) * MS_PER_DAY
 }
@@ -61,6 +66,7 @@ pub(crate) fn floor_to_day(ms: i64) -> i64 {
 ///   （`1-31` 加一月落到 `2-28` / `2-29`）→ 重新组回毫秒。
 /// - 出参：新的 epoch 毫秒。月线网格要用它——`1M` 的步长不是常数，
 ///   Binance 的月线开在每月 1 日 `00:00:00Z`。
+#[cfg(feature = "data")]
 pub(crate) fn add_months(ms: i64, months: i64) -> i64 {
     let (y, m, d, ..) = split_millis(ms);
     let rem = ms.rem_euclid(MS_PER_DAY);

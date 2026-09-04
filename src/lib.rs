@@ -34,3 +34,6 @@ pub mod net;
 
 #[cfg(feature = "data")]
 pub mod data;
+
+#[cfg(feature = "trader")]
+pub mod trader;
