@@ -26,10 +26,7 @@ timestamp,symbol,open,high,low,close,volume
 }
 
 fn assert_close(a: f64, b: f64) {
-    assert!(
-        (a - b).abs() < 1e-9,
-        "期望 {b} 实际 {a}"
-    );
+    assert!((a - b).abs() < 1e-9, "期望 {b} 实际 {a}");
 }
 
 #[test]
@@ -480,14 +477,8 @@ fn arithmetic_and_operators_agree() {
 
 #[test]
 fn divide_guards_against_near_zero() {
-    let a = Factor::from_records(
-        vec![("2024-01-01".into(), "AAA".into(), 1.0)],
-        "a",
-    );
-    let zero = Factor::from_records(
-        vec![("2024-01-01".into(), "AAA".into(), 0.0)],
-        "zero",
-    );
+    let a = Factor::from_records(vec![("2024-01-01".into(), "AAA".into(), 1.0)], "a");
+    let zero = Factor::from_records(vec![("2024-01-01".into(), "AAA".into(), 0.0)], "zero");
     assert!(a.divide(&zero).at(0, 0).is_nan());
     assert!(a.divide(0.0).at(0, 0).is_nan());
     assert_close(a.divide(2.0).at(0, 0), 0.5);
@@ -677,13 +668,7 @@ fn ts_skewness_composes_rolling_moments() {
 
     let long = Factor::from_records(
         (1..=5)
-            .map(|i| {
-                (
-                    format!("2024-01-0{i}"),
-                    "AAA".to_string(),
-                    i as f64,
-                )
-            })
+            .map(|i| (format!("2024-01-0{i}"), "AAA".to_string(), i as f64))
             .collect(),
         "x",
     );
@@ -738,8 +723,8 @@ fn readme_momentum_pipeline_runs() {
 
     // 对应 README 的动量 + 成交量中性化组合
     let momentum = close.divide(&close.ts_delay(2)).subtract(1.0);
-    let factor = vector_neut(&rank(&momentum), &rank(&volume.reverse()))
-        .rename("momentum_neut_volume");
+    let factor =
+        vector_neut(&rank(&momentum), &rank(&volume.reverse())).rename("momentum_neut_volume");
 
     assert_eq!(factor.name, "momentum_neut_volume");
     assert_eq!(factor.n_periods(), 4);
@@ -801,6 +786,96 @@ fn slice_helpers_narrow_the_panel() {
         narrowed.factor("close").expect("close 列存在").at(0, 1),
         30.0,
     );
+}
+
+#[test]
+fn select_narrows_columns() {
+    let panel = sample_panel();
+    let sub = panel.select(&["volume", "close"]).expect("两列都存在");
+    // 与 slice_* 一样只收窄列，时间与标的索引不动
+    assert_eq!(sub.column_names(), ["close", "volume"]);
+    assert_eq!(sub.timestamps(), panel.timestamps());
+    assert_eq!(sub.symbols(), panel.symbols());
+    assert_close(sub.factor("close").expect("close").at(3, 2), 35.0);
+    assert!(sub.factor("open").is_err(), "未选中的列应取不到");
+
+    // 入参里的索引列被忽略（上游先滤掉再无条件加回），重复项只保留一次
+    assert_eq!(
+        panel
+            .select(&["close", "timestamp", "symbol"])
+            .unwrap()
+            .column_names(),
+        ["close"]
+    );
+    assert_eq!(
+        panel.select(&["close", "close"]).unwrap().column_names(),
+        ["close"]
+    );
+
+    // 列不存在 / 一列都不剩
+    assert!(panel
+        .select(&["vwap"])
+        .expect_err("列不存在")
+        .contains("vwap"));
+    assert!(panel.select(&[]).is_err(), "空选择应报错");
+    assert!(panel.select(&["timestamp"]).is_err(), "只给索引列应报错");
+}
+
+#[test]
+fn to_csv_string_round_trips_and_blanks_nan() {
+    let panel = Panel::from_csv_str(
+        "\
+timestamp,symbol,close,volume
+2024-01-01,AAA,10,100
+2024-01-01,BBB,20,
+2024-01-02,AAA,,110
+2024-01-02,BBB,19,190
+",
+    )
+    .expect("可解析");
+
+    let csv = panel.to_csv_string();
+    // 表头 = timestamp,symbol + 升序列名；NaN 写成空字段（同 pandas to_csv）
+    assert_eq!(
+        csv,
+        "\
+timestamp,symbol,close,volume
+2024-01-01,AAA,10,100
+2024-01-01,BBB,20,
+2024-01-02,AAA,,110
+2024-01-02,BBB,19,190
+"
+    );
+
+    // 读回后逐格一致
+    let back = Panel::from_csv_str(&csv).expect("可读回");
+    assert_eq!(back.column_names(), panel.column_names());
+    assert_eq!(back.timestamps(), panel.timestamps());
+    for name in panel.column_names() {
+        let (a, b) = (panel.factor(name).unwrap(), back.factor(name).unwrap());
+        for (x, y) in a.values().iter().zip(b.values()) {
+            assert!(
+                (x.is_nan() && y.is_nan()) || (x - y).abs() < 1e-12,
+                "列 {name} 读回不一致：{x} vs {y}"
+            );
+        }
+    }
+
+    // to_records 的值顺序与 column_names 一致，可回喂 from_records
+    let names = panel.column_names();
+    let again = Panel::from_records(&names, panel.to_records()).expect("可重建");
+    assert_eq!(again.to_csv_string(), csv);
+}
+
+#[test]
+fn to_csv_writes_the_same_text_to_disk() {
+    let panel = sample_panel();
+    let path = std::env::temp_dir().join("phandas_rs_panel_to_csv.csv");
+    panel.to_csv(&path).expect("写盘成功");
+    let read_back = std::fs::read_to_string(&path).expect("可读回");
+    assert_eq!(read_back, panel.to_csv_string());
+    assert!(read_back.starts_with("timestamp,symbol,close,high,low,open,volume\n"));
+    std::fs::remove_file(&path).expect("清理临时文件");
 }
 
 #[test]

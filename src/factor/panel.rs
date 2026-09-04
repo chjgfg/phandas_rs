@@ -57,10 +57,16 @@ impl Panel {
 
         let timestamps: Vec<String> = ts_set.into_iter().collect();
         let symbols: Vec<String> = sym_set.into_iter().collect();
-        let ts_pos: BTreeMap<&str, usize> =
-            timestamps.iter().enumerate().map(|(i, s)| (s.as_str(), i)).collect();
-        let sym_pos: BTreeMap<&str, usize> =
-            symbols.iter().enumerate().map(|(i, s)| (s.as_str(), i)).collect();
+        let ts_pos: BTreeMap<&str, usize> = timestamps
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.as_str(), i))
+            .collect();
+        let sym_pos: BTreeMap<&str, usize> = symbols
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.as_str(), i))
+            .collect();
 
         let cell_count = timestamps.len() * symbols.len();
         let mut columns: BTreeMap<String, Vec<f64>> = column_names
@@ -75,7 +81,11 @@ impl Panel {
             }
         }
 
-        Ok(Panel { timestamps, symbols, columns })
+        Ok(Panel {
+            timestamps,
+            symbols,
+            columns,
+        })
     }
 
     /// 解析 CSV 文本。首行须为表头，且包含 `timestamp` 与 `symbol` 两列；
@@ -109,7 +119,13 @@ impl Panel {
         let mut records: Vec<(String, String, Vec<f64>)> = Vec::new();
         for (lineno, line) in lines.enumerate() {
             let fields = split_csv_line(line);
-            let need = value_cols.iter().map(|(i, _)| *i).max().unwrap_or(0).max(ts_idx).max(sym_idx);
+            let need = value_cols
+                .iter()
+                .map(|(i, _)| *i)
+                .max()
+                .unwrap_or(0)
+                .max(ts_idx)
+                .max(sym_idx);
             if fields.len() <= need {
                 return Err(format!("第 {} 行字段不足：{line}", lineno + 2));
             }
@@ -162,6 +178,37 @@ impl Panel {
     /// - 出参：升序排列的列名切片向量。
     pub fn column_names(&self) -> Vec<&str> {
         self.columns.keys().map(String::as_str).collect()
+    }
+
+    /// 按列名取子面板，对应 Python 侧 `panel[['close', 'volume']]`。
+    ///
+    /// - 入参：`columns` 要保留的数值列名。重复项只保留一次；`"timestamp"` / `"symbol"`
+    ///   出现在入参里会被忽略——上游也是先把这两个名字滤掉、再无条件加回索引列。
+    /// - 加工：逐名查列 → 克隆命中列的数值矩阵；时间与标的索引原样带过去，不重排。
+    /// - 出参：`Ok(Panel)`，数值列按列名升序；任一列不存在时返回 `Err`
+    ///   （上游交给 pandas 抛 `KeyError`）。若滤除索引列后一列都不剩也返回 `Err`，
+    ///   与 [`Panel::from_records`]"至少需要一个数值列"的约束一致
+    ///   （上游允许 `panel[[]]` 造出 0 列的 Panel）。
+    pub fn select(&self, columns: &[&str]) -> Result<Panel, String> {
+        let mut picked: BTreeMap<String, Vec<f64>> = BTreeMap::new();
+        for name in columns {
+            if *name == "timestamp" || *name == "symbol" {
+                continue;
+            }
+            let vals = self
+                .columns
+                .get(*name)
+                .ok_or_else(|| format!("Column '{name}' not found"))?;
+            picked.insert((*name).to_string(), vals.clone());
+        }
+        if picked.is_empty() {
+            return Err("至少需要一个数值列".to_string());
+        }
+        Ok(Panel {
+            timestamps: self.timestamps.clone(),
+            symbols: self.symbols.clone(),
+            columns: picked,
+        })
     }
 
     /// 面板包含的标的列表。
@@ -267,6 +314,69 @@ impl Panel {
             symbols: keep.iter().map(|&i| self.symbols[i].clone()).collect(),
             columns,
         }
+    }
+
+    /// 展开为长表记录，对应 Python 侧 `Panel.to_df()` 的 (timestamp, symbol, 各列) 结构。
+    ///
+    /// - 入参：无。
+    /// - 加工：按"先时间、后标的"遍历全部单元格，每格把各数值列的取值收成一条记录
+    ///   （NaN 也照样输出）；值的顺序与 [`Panel::column_names`] 一致，即列名升序。
+    /// - 出参：长度为 `期数 × 标的数` 的记录向量，可直接回喂 [`Panel::from_records`]。
+    pub fn to_records(&self) -> Vec<(String, String, Vec<f64>)> {
+        let n = self.symbols.len();
+        let cols: Vec<&Vec<f64>> = self.columns.values().collect();
+        let mut out = Vec::with_capacity(self.len());
+        for (ti, ts) in self.timestamps.iter().enumerate() {
+            for (si, sym) in self.symbols.iter().enumerate() {
+                let offset = ti * n + si;
+                out.push((
+                    ts.clone(),
+                    sym.clone(),
+                    cols.iter().map(|c| c[offset]).collect(),
+                ));
+            }
+        }
+        out
+    }
+
+    /// 导出 CSV 文本，即 Python 侧 `Panel.to_csv(path)` 写进文件的内容。
+    ///
+    /// - 入参：无。
+    /// - 加工：表头写 `timestamp,symbol` 再接各数值列名 → 逐格展开长表，NaN 写成空字段
+    ///   （与 pandas `to_csv` 及 [`Factor::to_csv_string`] 一致）。
+    /// - 出参：完整 CSV 字符串（不落盘，落盘用 [`Panel::to_csv`]），可被
+    ///   [`Panel::from_csv_str`] 原样读回。**数值列按列名升序排列**，不保留读入时的原始
+    ///   列序——面板内部按有序表存列，[`Panel::column_names`] / [`Panel::info`] 也是这个
+    ///   顺序；上游 pandas 保留原序。
+    pub fn to_csv_string(&self) -> String {
+        let mut s = String::from("timestamp,symbol");
+        for name in self.columns.keys() {
+            s.push(',');
+            s.push_str(name);
+        }
+        s.push('\n');
+        for (ts, sym, vals) in self.to_records() {
+            s.push_str(&format!("{ts},{sym}"));
+            for v in vals {
+                s.push(',');
+                if !v.is_nan() {
+                    s.push_str(&format!("{v}"));
+                }
+            }
+            s.push('\n');
+        }
+        s
+    }
+
+    /// 写出 CSV 文件，对应 Python 侧 `Panel.to_csv(path)`。
+    ///
+    /// - 入参：`path` 目标文件路径。
+    /// - 加工：先由 [`Panel::to_csv_string`] 生成文本，再整体写盘（已存在的文件会被覆盖）。
+    /// - 出参：`Ok(())`；写入失败时返回带路径信息的 `Err`。上游返回路径本身以便链式书写，
+    ///   本仓库与自由函数 [`super::to_csv`] 保持一致返回 `Result<(), String>`。
+    pub fn to_csv<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), String> {
+        std::fs::write(path.as_ref(), self.to_csv_string())
+            .map_err(|e| format!("写入 {} 失败：{e}", path.as_ref().display()))
     }
 
     /// 概要信息，对应 Python 侧 `Panel.info()`。

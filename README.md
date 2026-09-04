@@ -119,6 +119,10 @@ cargo run --release --example smoke -- path/to/crypto_1d.csv
 - 时序运算逐列计算，对应 Python 侧 `groupby('symbol').rolling(...)`
 - 二元运算按 `(timestamp, symbol)` 取交集，等价于 `pd.merge(how='inner')`
 
+`Panel` 是共享同一索引的多列容器：`factor("close")` 取单列成 `Factor`、
+`select(&["close", "volume"])` 取列子集、`slice_time` / `slice_symbols` 收窄索引、
+`to_records()` / `to_csv_string()` / `to_csv(path)` 导出长表（NaN 写空字段）。
+
 ## 运算子
 
 | 类别 | 举例 |
