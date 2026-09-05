@@ -55,6 +55,7 @@ async fn step1_fetch() -> Result<Panel, String> {
         Timeframe::D1,
         Some("2024-01-01"),
         Some("2024-12-31"),
+        // Some("2026-08-31"),
         &[Source::Binance],
     )
     .await?;
